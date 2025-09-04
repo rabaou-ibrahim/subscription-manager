@@ -1,0 +1,30 @@
+[
+  {"name":"Netflix","provider":"Netflix, Inc.","website":"https://www.netflix.com","logo":"https://logo.clearbit.com/netflix.com","category":"video","currency":"EUR"},
+  {"name":"Amazon Prime Video","provider":"Amazon","website":"https://www.primevideo.com","logo":"https://logo.clearbit.com/amazon.com","category":"video","currency":"EUR"},
+  {"name":"Disney+","provider":"Disney","website":"https://www.disneyplus.com","logo":"https://logo.clearbit.com/disneyplus.com","category":"video","currency":"EUR"},
+  {"name":"Canal+","provider":"Groupe Canal+","website":"https://www.canalplus.com","logo":"https://logo.clearbit.com/canalplus.com","category":"video","currency":"EUR"},
+  {"name":"OCS","provider":"Orange","website":"https://www.ocs.fr","logo":"https://logo.clearbit.com/ocs.fr","category":"video","currency":"EUR"},
+
+  {"name":"Spotify","provider":"Spotify AB","website":"https://www.spotify.com","logo":"https://logo.clearbit.com/spotify.com","category":"music","currency":"EUR"},
+  {"name":"Apple Music","provider":"Apple","website":"https://music.apple.com","logo":"https://logo.clearbit.com/apple.com","category":"music","currency":"EUR"},
+  {"name":"YouTube Premium","provider":"Google","website":"https://www.youtube.com/premium","logo":"https://logo.clearbit.com/youtube.com","category":"video","currency":"EUR"},
+  {"name":"Deezer","provider":"Deezer","website":"https://www.deezer.com","logo":"https://logo.clearbit.com/deezer.com","category":"music","currency":"EUR"},
+
+  {"name":"Orange","provider":"Orange","website":"https://www.orange.fr","logo":"https://logo.clearbit.com/orange.fr","category":"telecom","currency":"EUR"},
+  {"name":"SFR","provider":"SFR","website":"https://www.sfr.fr","logo":"https://logo.clearbit.com/sfr.fr","category":"telecom","currency":"EUR"},
+  {"name":"Bouygues Telecom","provider":"Bouygues","website":"https://www.bouyguestelecom.fr","logo":"https://logo.clearbit.com/bouyguestelecom.fr","category":"telecom","currency":"EUR"},
+  {"name":"Free","provider":"Iliad/Free","website":"https://www.free.fr","logo":"https://logo.clearbit.com/free.fr","category":"telecom","currency":"EUR"},
+
+  {"name":"Microsoft 365","provider":"Microsoft","website":"https://www.microsoft.com","logo":"https://logo.clearbit.com/microsoft.com","category":"productivity","currency":"EUR"},
+  {"name":"Google One","provider":"Google","website":"https://one.google.com","logo":"https://logo.clearbit.com/google.com","category":"cloud","currency":"EUR"},
+  {"name":"iCloud+","provider":"Apple","website":"https://www.icloud.com","logo":"https://logo.clearbit.com/apple.com","category":"cloud","currency":"EUR"},
+  {"name":"Dropbox","provider":"Dropbox","website":"https://www.dropbox.com","logo":"https://logo.clearbit.com/dropbox.com","category":"cloud","currency":"EUR"},
+  {"name":"Adobe Creative Cloud","provider":"Adobe","website":"https://www.adobe.com","logo":"https://logo.clearbit.com/adobe.com","category":"productivity","currency":"EUR"},
+
+  {"name":"Xbox Game Pass","provider":"Microsoft","website":"https://www.xbox.com/xbox-game-pass","logo":"https://logo.clearbit.com/xbox.com","category":"gaming","currency":"EUR"},
+  {"name":"PlayStation Plus","provider":"Sony","website":"https://www.playstation.com/plus/","logo":"https://logo.clearbit.com/playstation.com","category":"gaming","currency":"EUR"},
+  {"name":"Nintendo Switch Online","provider":"Nintendo","website":"https://www.nintendo.com/switch/online/","logo":"https://logo.clearbit.com/nintendo.com","category":"gaming","currency":"EUR"},
+
+  {"name":"NordVPN","provider":"Nord Security","website":"https://nordvpn.com","logo":"https://logo.clearbit.com/nordvpn.com","category":"vpn","currency":"EUR"},
+  {"name":"Surfshark","provider":"Surfshark","website":"https://surfshark.com","logo":"https://logo.clearbit.com/surfshark.com","category":"vpn","currency":"EUR"}
+]
