@@ -64,14 +64,23 @@
     },
     "scripts": {
         "auto-scripts": {
-            "cache:clear": "symfony-cmd",
-            "assets:install %PUBLIC_DIR%": "symfony-cmd"
+        "cache:clear": "symfony-cmd",
+        "assets:install %PUBLIC_DIR%": "symfony-cmd"
         },
         "post-install-cmd": [
-            "@auto-scripts"
+        "@auto-scripts"
         ],
         "post-update-cmd": [
-            "@auto-scripts"
+        "@auto-scripts"
+        ],
+        "test:reset": [
+        "php bin/console doctrine:database:drop --env=test --force --if-exists",
+        "php bin/console doctrine:database:create --env=test",
+        "php bin/console doctrine:schema:create --env=test"
+        ],
+        "test": [
+        "@test:reset",
+        "php vendor/bin/phpunit"
         ]
     },
     "conflict": {
