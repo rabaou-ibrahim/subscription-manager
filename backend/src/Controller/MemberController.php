@@ -272,7 +272,7 @@ public function getAllMembers(Request $request, MemberRepository $memberReposito
 }
 
 
-    #[Route('/{id}', name: 'get_member_by_id', methods: ['GET'])]
+    #[Route('/{id}', name: 'get_member_by_id', methods: ['GET'], requirements: ['id' => '[0-9a-fA-F-]{36}'])]
     public function getMemberById(string $id, MemberRepository $memberRepository): JsonResponse
     {
         $member = $memberRepository->find($id);
