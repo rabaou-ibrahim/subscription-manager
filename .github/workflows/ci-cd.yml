@@ -9,43 +9,28 @@ on:
       - 'v*'
   workflow_dispatch:
 
-defaults:
-  run:
-    working-directory: backend
-
 jobs:
   test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
     env:
-      # utile si ton bundle lit ces variables directement
       JWT_PASSPHRASE: ${{ secrets.JWT_PASSPHRASE }}
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
           extensions: mbstring, intl, ctype, iconv, dom, json, pdo_sqlite, openssl
           coverage: none
-
-      - name: Cache Composer download cache
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
           path: ~/.cache/composer/files
           key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-composer-
-
-      - name: Install dependencies
-        run: composer install --no-interaction --prefer-dist --no-progress
-
-      - name: Configure test DB (SQLite)
-        run: echo "DATABASE_URL=sqlite:///%kernel.project_dir%/var/test.db" >> .env.test.local
-
-      # 🔐 Génération clés JWT éphémères pour la CI
+          restore-keys: ${{ runner.os }}-composer-
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - run: echo "DATABASE_URL=sqlite:///%kernel.project_dir%/var/test.db" >> .env.test.local
       - name: Generate JWT keys
         run: |
           mkdir -p config/jwt
@@ -53,8 +38,6 @@ jobs:
           openssl genrsa -aes256 -passout file:./jwt.pass -out config/jwt/private.pem 4096
           openssl rsa -in config/jwt/private.pem -passin file:./jwt.pass -pubout -out config/jwt/public.pem
           rm ./jwt.pass
-
-      # ♻️ Variables d'env pour LexikJWTAuthenticationBundle (ou équivalent)
       - name: Configure JWT env
         run: |
           {
@@ -62,26 +45,21 @@ jobs:
             echo "JWT_PUBLIC_KEY=%kernel.project_dir%/config/jwt/public.pem";
             echo "JWT_PASSPHRASE=${{ secrets.JWT_PASSPHRASE }}";
           } >> .env.test.local
-
       - name: Prepare schema
         run: |
           php bin/console doctrine:database:create --if-not-exists --env=test || true
           php bin/console doctrine:schema:create --env=test || true
-          # ou: php bin/console doctrine:migrations:migrate --no-interaction --env=test
-
-      - name: Run PHPUnit
-        run: vendor/bin/phpunit --colors=always
+      - run: vendor/bin/phpunit --colors=always
 
   notify:
     runs-on: ubuntu-latest
     needs: test
-    if: always()                  # le job tourne toujours (succès/échec)
+    if: always()
     env:
-      WEBHOOK: ${{ secrets.GOOGLE_CHAT_WEBHOOK }}   # on “pont” le secret -> env
-
+      WEBHOOK: ${{ secrets.GOOGLE_CHAT_WEBHOOK }}
     steps:
       - name: Post to Google Chat (simple text)
-        if: ${{ env.WEBHOOK != '' }}                # le test se fait au step
+        if: ${{ env.WEBHOOK != '' }}
         env:
           STATUS: ${{ needs.test.result }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
