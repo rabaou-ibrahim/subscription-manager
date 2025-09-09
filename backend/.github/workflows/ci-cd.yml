@@ -3,7 +3,7 @@ name: CI (tests only)
 on:
   push:
     branches:
-      - [ '**' ]
+      - [ main, '**' ]
     tags:
       - 'v*'
   workflow_dispatch:
