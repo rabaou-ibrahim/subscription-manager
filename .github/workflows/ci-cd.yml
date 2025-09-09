@@ -75,7 +75,7 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     needs: test
-    if: always()
+    if: always() && ${{ secrets.GOOGLE_CHAT_WEBHOOK != '' }}
     defaults:
       run:
         working-directory: .   # évite le dossier backend ici
@@ -83,7 +83,6 @@ jobs:
     steps:
       - name: Post to Google Chat (simple text)
         # ✅ vérifie bien la présence du secret côté GitHub
-        if: ${{ secrets.GOOGLE_CHAT_WEBHOOK != '' }}
         env:
           WEBHOOK: ${{ secrets.GOOGLE_CHAT_WEBHOOK }}
           STATUS: ${{ needs.test.result }}
