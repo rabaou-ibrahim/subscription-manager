@@ -16,6 +16,9 @@ defaults:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      # utile si ton bundle lit ces variables directement
+      JWT_PASSPHRASE: ${{ secrets.JWT_PASSPHRASE }}
 
     steps:
       - name: Checkout
@@ -25,7 +28,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
-          extensions: mbstring, intl, ctype, iconv, dom, json, pdo_sqlite
+          extensions: mbstring, intl, ctype, iconv, dom, json, pdo_sqlite, openssl
           coverage: none
 
       - name: Cache Composer download cache
@@ -42,47 +45,29 @@ jobs:
       - name: Configure test DB (SQLite)
         run: echo "DATABASE_URL=sqlite:///%kernel.project_dir%/var/test.db" >> .env.test.local
 
+      # 🔐 Génération clés JWT éphémères pour la CI
+      - name: Generate JWT keys
+        run: |
+          mkdir -p config/jwt
+          echo "${{ secrets.JWT_PASSPHRASE }}" > ./jwt.pass
+          openssl genrsa -aes256 -passout file:./jwt.pass -out config/jwt/private.pem 4096
+          openssl rsa -in config/jwt/private.pem -passin file:./jwt.pass -pubout -out config/jwt/public.pem
+          rm ./jwt.pass
+
+      # ♻️ Variables d'env pour LexikJWTAuthenticationBundle (ou équivalent)
+      - name: Configure JWT env
+        run: |
+          {
+            echo "JWT_SECRET_KEY=%kernel.project_dir%/config/jwt/private.pem";
+            echo "JWT_PUBLIC_KEY=%kernel.project_dir%/config/jwt/public.pem";
+            echo "JWT_PASSPHRASE=${{ secrets.JWT_PASSPHRASE }}";
+          } >> .env.test.local
+
       - name: Prepare schema
         run: |
           php bin/console doctrine:database:create --if-not-exists --env=test || true
           php bin/console doctrine:schema:create --env=test || true
-          # ou, si tu utilises des migrations :
-          # php bin/console doctrine:migrations:migrate --no-interaction --env=test
+          # ou: php bin/console doctrine:migrations:migrate --no-interaction --env=test
 
       - name: Run PHPUnit
         run: vendor/bin/phpunit --colors=always
-
-  notify:
-    runs-on: ubuntu-latest
-    needs: [test]
-    if: always()
-    env:
-      GOOGLE_CHAT_WEBHOOK: ${{ secrets.GOOGLE_CHAT_WEBHOOK }}
-
-    steps:
-      - name: Send Google Chat notification (optional)
-        if: ${{ env.GOOGLE_CHAT_WEBHOOK != '' }}
-        uses: SimonScholz/google-chat-action@main
-        with:
-          webhookUrl: ${{ env.GOOGLE_CHAT_WEBHOOK }}
-          message: |
-            {
-              "cards": [
-                {
-                  "header": {
-                    "title": "CI Status",
-                    "subtitle": "Workflow: ${{ github.workflow }}",
-                    "imageUrl": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
-                  },
-                  "sections": [
-                    {
-                      "widgets": [
-                        { "keyValue": { "topLabel": "Status", "content": "${{ needs.test.result }}" } },
-                        { "keyValue": { "topLabel": "Branch/Tag", "content": "${{ github.ref_name }}" } },
-                        { "keyValue": { "topLabel": "Run", "content": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" } }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            }
