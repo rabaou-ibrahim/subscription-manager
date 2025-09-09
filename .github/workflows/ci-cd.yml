@@ -72,24 +72,22 @@ jobs:
       - name: Run PHPUnit
         run: vendor/bin/phpunit --colors=always
 
-  notify:
-    runs-on: ubuntu-latest
-    needs: test
-    if: always() && ${{ secrets.GOOGLE_CHAT_WEBHOOK != '' }}
-    defaults:
-      run:
-        working-directory: .   # évite le dossier backend ici
-
-    steps:
-      - name: Post to Google Chat (simple text)
-        # ✅ vérifie bien la présence du secret côté GitHub
-        env:
-          WEBHOOK: ${{ secrets.GOOGLE_CHAT_WEBHOOK }}
-          STATUS: ${{ needs.test.result }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          REF: ${{ github.ref_name }}
-        run: |
-          echo "Sending message to Google Chat…"
-          curl -f -s -X POST -H 'Content-Type: application/json' \
-            -d "{\"text\":\"CI: ${STATUS}\nBranch/Tag: ${REF}\nRun: ${RUN_URL}\"}" \
-            "${WEBHOOK}"
+notify:
+  runs-on: ubuntu-latest
+  needs: test
+  if: ${{ always() && secrets.GOOGLE_CHAT_WEBHOOK != '' }}  # ✅
+  defaults:
+    run:
+      working-directory: .
+  steps:
+    - name: Post to Google Chat (simple text)
+      env:
+        WEBHOOK: ${{ secrets.GOOGLE_CHAT_WEBHOOK }}
+        STATUS: ${{ needs.test.result }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        REF: ${{ github.ref_name }}
+      run: |
+        echo "Sending message to Google Chat…"
+        curl -f -s -X POST -H 'Content-Type: application/json' \
+          -d "{\"text\":\"CI: ${STATUS}\nBranch/Tag: ${REF}\nRun: ${RUN_URL}\"}" \
+          "${WEBHOOK}"
