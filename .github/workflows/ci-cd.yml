@@ -73,20 +73,20 @@ jobs:
         run: vendor/bin/phpunit --colors=always
 
   notify:
-  runs-on: ubuntu-latest
-  needs: test
-  if: always()                  # le job tourne toujours (succès/échec)
-  env:
-    WEBHOOK: ${{ secrets.GOOGLE_CHAT_WEBHOOK }}   # on “pont” le secret -> env
+    runs-on: ubuntu-latest
+    needs: test
+    if: always()                  # le job tourne toujours (succès/échec)
+    env:
+      WEBHOOK: ${{ secrets.GOOGLE_CHAT_WEBHOOK }}   # on “pont” le secret -> env
 
-  steps:
-    - name: Post to Google Chat (simple text)
-      if: ${{ env.WEBHOOK != '' }}                # le test se fait au step
-      env:
-        STATUS: ${{ needs.test.result }}
-        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        REF: ${{ github.ref_name }}
-      run: |
-        echo "Sending message to Google Chat…"
-        payload=$(printf '{"text":"CI: %s\nBranch/Tag: %s\nRun: %s"}' "$STATUS" "$REF" "$RUN_URL")
-        curl -sSf -H 'Content-Type: application/json' -d "$payload" "$WEBHOOK"
+    steps:
+      - name: Post to Google Chat (simple text)
+        if: ${{ env.WEBHOOK != '' }}                # le test se fait au step
+        env:
+          STATUS: ${{ needs.test.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REF: ${{ github.ref_name }}
+        run: |
+          echo "Sending message to Google Chat…"
+          payload=$(printf '{"text":"CI: %s\nBranch/Tag: %s\nRun: %s"}' "$STATUS" "$REF" "$RUN_URL")
+          curl -sSf -H 'Content-Type: application/json' -d "$payload" "$WEBHOOK"
