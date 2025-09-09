@@ -81,7 +81,7 @@ jobs:
         working-directory: .
     steps:
       - name: Post to Google Chat (simple text)
-        if: ${{ secrets.GOOGLE_CHAT_WEBHOOK != '' }}
+        if: ${{ env.GOOGLE_CHAT_WEBHOOK != '' }}
         env:
           GOOGLE_CHAT_WEBHOOK: ${{ secrets.GOOGLE_CHAT_WEBHOOK }}
           STATUS: ${{ needs.test.result }}
