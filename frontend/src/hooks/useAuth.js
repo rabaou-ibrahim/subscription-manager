@@ -1,86 +1,62 @@
-// frontend/src/hooks/useAuth.js
-import { useCallback, useEffect, useMemo, useState } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { login as apiLogin, register as apiRegister, me as apiMe, logout as apiLogout } from "../services/auth";
-// (Facultatif si tu as déjà un store Zustand)
-try {
-  // eslint-disable-next-line global-require
-  var { useAccountStore } = require("../store/account");
-} catch {
-  // Fallback si le store n'existe pas
-  var useAccountStore = () => ({ account: null, setAccount: () => {}, restoreAccount: () => {} });
-}
+// src/hooks/useAuth.js
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { storage } from "../lib/storage";
+import { API, json } from "../services/http"; // keep your helper
 
 export default function useAuth() {
-  const [loading, setLoading] = useState(true);
+  const [ready, setReady] = useState(false);
   const [token, setToken] = useState(null);
-  const { account, setAccount, restoreAccount } = useAccountStore();
+  const [user, setUser] = useState(null);
 
-  const isAuthenticated = !!token;
+  const isLogged = !!token;
+  const roles = user?.roles || user?.role || []; // your backend uses ["ROLE_ADMIN"]
+  const isAdmin = useMemo(
+    () => Array.isArray(roles) && roles.includes("ROLE_ADMIN"),
+    [roles]
+  );
 
-  // Charger token + profil au montage
+  // bootstrap
   useEffect(() => {
     (async () => {
-      const t = await AsyncStorage.getItem("token");
-      setToken(t);
+      const t = await storage.get("token");
       if (t) {
+        setToken(t);
         try {
-          const user = await apiMe();
-          setAccount?.(user);
+          const me = await json(`${API}/api/user/me`, {
+            headers: { Authorization: `Bearer ${t}` },
+          });
+          setUser(me);
         } catch {
-          await AsyncStorage.removeItem("token");
           setToken(null);
-          restoreAccount?.();
+          await storage.del("token");
         }
-      } else {
-        restoreAccount?.();
       }
-      setLoading(false);
+      setReady(true);
     })();
-  }, [setAccount, restoreAccount]);
-
-  // Helpers rôles (ton champ: "role" = tableau de rôles)
-  const roles = useMemo(() => {
-    const r = account?.role || account?.roles || [];
-    return Array.isArray(r) ? r : [];
-  }, [account]);
-
-  const hasRole = useCallback((r) => roles.includes(r), [roles]);
-  const hasAnyRole = useCallback((arr) => arr?.some?.((r) => roles.includes(r)), [roles]);
-  const isAdmin = useMemo(() => hasRole("ROLE_ADMIN"), [hasRole]);
-
-  // Actions
-  const doLogin = useCallback(async (email, password) => {
-    const t = await apiLogin(email, password);
-    setToken(t);
-    const user = await apiMe();
-    setAccount?.(user);
-    return user;
-  }, [setAccount]);
-
-  const doRegister = useCallback(async (payload) => {
-    await apiRegister(payload);
-    // On laisse l’écran appeler doLogin ensuite si besoin
-    return true;
   }, []);
 
-  const doLogout = useCallback(async () => {
-    await apiLogout();
-    setToken(null);
-    restoreAccount?.();
-  }, [restoreAccount]);
+  const login = useCallback(async (email, password) => {
+    const data = await json(`${API}/api/auth/login`, {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    const t = data?.token || data?.jwt || data?.id_token;
+    if (!t) throw new Error(data?.message || "Login failed");
+    await storage.set("token", t);
+    setToken(t);
 
-  return {
-    loading,
-    isAuthenticated,
-    token,
-    user: account || null,
-    roles,
-    hasRole,
-    hasAnyRole,
-    isAdmin,
-    login: doLogin,
-    register: doRegister,
-    logout: doLogout,
-  };
+    const me = await json(`${API}/api/user/me`, {
+      headers: { Authorization: `Bearer ${t}` },
+    });
+    setUser(me);
+    return { token: t, user: me };
+  }, []);
+
+  const logout = useCallback(async () => {
+    setUser(null);
+    setToken(null);
+    await storage.del("token");
+  }, []);
+
+  return { ready, isLogged, token, user, roles, isAdmin, login, logout, setUser };
 }
