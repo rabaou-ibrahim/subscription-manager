@@ -223,6 +223,31 @@ export default function AddSubscriptionScreen() {
                 <Text style={{ color: "#9cdcfe", marginBottom: 8 }}>Préparation…</Text>
               ) : null}
 
+              {services.length === 0 && (
+                <View style={{ backgroundColor:"#0f0f0f", borderWidth:1, borderColor:"#1f1f1f",
+                              borderRadius:12, padding:12, marginBottom:12 }}>
+                  <Text style={{ color:"#9aa0a6", marginBottom:8 }}>
+                    Aucun service en base. Tu peux importer une liste depuis Internet.
+                  </Text>
+                  <TouchableOpacity
+                    onPress={async () => {
+                      try {
+                        const { created, failed, skipped } = await importServicesFromEnv(authHeaders);
+                        const data = await json("/api/service/all", { headers: { ...authHeaders } });
+                        setServices(Array.isArray(data) ? data : (data?.items ?? []));
+                        Alert.alert("Import terminé",
+                          `Créés: ${created}\nÉchecs: ${failed}\nIgnorés (déjà présents): ${skipped}`);
+                      } catch (e) {
+                        Alert.alert("Erreur", e?.message || "Import impossible");
+                      }
+                    }}
+                    style={{ backgroundColor:"#B7FF27", borderRadius:10, paddingVertical:12, alignItems:"center" }}
+                  >
+                    <Text style={{ fontWeight:"800" }}>Importer depuis Internet</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
               {/* Service */}
               <Text style={[styles.label, textWhite]}>Service</Text>
               <TouchableOpacity
