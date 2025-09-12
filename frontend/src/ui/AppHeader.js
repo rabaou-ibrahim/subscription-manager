@@ -3,11 +3,13 @@ import React from "react";
 import { View, Text, TouchableOpacity, useWindowDimensions, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native"; // 👈
+import useAuth from "../hooks/useAuth";
 
 const GREEN = "#B7FF27";
 const BORDER = "#242424";
 
-export default function AppHeader({ isLogged }) {
+export default function AppHeader() {
+  const { isLogged } = useAuth();
   const navigation = useNavigation();               // 👈 on récupère la nav ici
   const { width } = useWindowDimensions();
   const isSmall = width < 480;
@@ -55,6 +57,7 @@ export default function AppHeader({ isLogged }) {
             <>
               <HeaderBtn label="Dashboard" icon="speedometer-outline" onPress={() => navigation.navigate("Dashboard")} compact={isSmall} />
               <HeaderBtn label="Abonnements" icon="albums-outline" onPress={() => navigation.navigate("SubscriptionList")} compact={isSmall} />
+              <HeaderBtn label="Profil" icon="person-outline" onPress={() => navigation.navigate("Profile")} compact={isSmall} />
             </>
           )}
         </ScrollView>

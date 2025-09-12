@@ -6,6 +6,7 @@ use App\Repository\UserRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -13,6 +14,13 @@ use Ramsey\Uuid\Uuid;
 use Ramsey\Uuid\Doctrine\UuidGenerator;
 use Doctrine\DBAL\Types\Types;
 
+
+#[UniqueEntity(fields: ['email'], message: 'Cet email est déjà utilisé.')]
+#[UniqueEntity(fields: ['username'], message: 'Ce pseudo est déjà pris.')]
+#[Assert\Expression(
+    "this.getUsername() === null or this.getUsername() !== this.getEmail()",
+    message: "L'email et le pseudo doivent être différents."
+)]
 #[ORM\Entity(repositoryClass: UserRepository::class)]
 #[ORM\Table(name: "`users`")] // Éviter les conflits avec le mot réservé "user"
 #[ORM\HasLifecycleCallbacks]

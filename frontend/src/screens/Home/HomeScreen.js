@@ -45,8 +45,8 @@ const ActionTile = ({ icon, label, onPress }) => (
 );
 
 export default function HomeScreen() {
+  const { loading, isLogged, user, logout } = useAuth();
   const nav = useNavigation();
-  const { loading, isAuthenticated, user, logout } = useAuth();
   const { width } = useWindowDimensions();
   const isWide = width >= 1024;
 
@@ -58,12 +58,14 @@ export default function HomeScreen() {
 
   return (
     <Layout scroll header={<AppHeader />} footer={<AppFooter />} maxWidth={null}>
-      {/* BG blobs plein écran */}
-      <View style={{ position:"absolute", top:-60, left:-40, width:320, height:320, borderRadius:160, opacity:0.12, backgroundColor: GREEN }} />
-      <View style={{ position:"absolute", bottom:-80, right:-60, width:320, height:320, borderRadius:160, opacity:0.12, backgroundColor:"#7C3AED" }} />
+      {/* BG blobs plein écran (ne doivent pas intercepter les touches) */}
++      <View pointerEvents="none" style={{ position:"absolute", inset:0, zIndex:0 }}>
++        <View style={{ position:"absolute", top:-60, left:-40, width:320, height:320, borderRadius:160, opacity:0.12, backgroundColor: GREEN }} />
++        <View style={{ position:"absolute", bottom:-80, right:-60, width:320, height:320, borderRadius:160, opacity:0.12, backgroundColor:"#7C3AED" }} />
++      </View>
 
       {/* Contenu centré jusqu’à 1200px */}
-      <View style={{ width:"100%", maxWidth:1200, alignSelf:"center", zIndex:1 }}>
+      <View style={{ position:"relative", zIndex:1, width:"100%", maxWidth:1200, alignSelf:"center" }}>
         {/* HERO */}
         <View style={{ backgroundColor:"#121212", borderWidth:1, borderColor:BORDER, borderRadius:18, padding:18, marginBottom:18 }}>
           <Text style={{ color: MUTED, fontSize: 12, letterSpacing: 0.4, marginBottom: 6 }}>Simple • Partagé • Serein</Text>
@@ -72,7 +74,7 @@ export default function HomeScreen() {
         </View>
 
         {/* Greeting */}
-        {isAuthenticated && (
+        {isLogged && (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 }}>
             <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "#1e1e1e", borderWidth: 1, borderColor: BORDER, alignItems: "center", justifyContent: "center" }}>
               <Text style={{ color: TEXT, fontWeight: "700" }}>{initial}</Text>
@@ -92,14 +94,14 @@ export default function HomeScreen() {
         )}
 
         {/* QUICK ACTIONS */}
-        <View style={{ gap: 16, marginBottom: 18, ...(isWide ? { flexDirection: "row" } : {}) }}>
+        <View style={{ gap: 60, marginBottom: 18, ...(isWide ? { flexDirection: "row" } : {}) }}>
           <View style={{ flex: 1 }}>
             <View style={{ backgroundColor: CARD, borderRadius: 16, borderWidth: 1, borderColor: BORDER, padding: 14 }}>
               <Text style={{ color: TEXT, fontWeight: "800", marginBottom: 8, fontSize: 14 }}>Actions rapides</Text>
-              {!isAuthenticated ? (
+              {!isLogged ? (
                 <>
                   <ActionTile icon="log-in-outline" label="Se connecter" onPress={() => nav.navigate("Login")} />
-                  <ActionTile icon="person-add-outline" label="Créer un compte" onPress={() => nav.navigate("Register")} />
+                  <ActionTile icon="person-add-outline" label="Créer un compte" onPress={() => { if (!isLogged) nav.navigate("Register"); }} />
                 </>
               ) : (
                 <>
@@ -107,6 +109,7 @@ export default function HomeScreen() {
                   <ActionTile icon="albums-outline" label="Mes abonnements" onPress={() => nav.navigate("SubscriptionList")} />
                   <ActionTile icon="people-outline" label="Espaces" onPress={() => nav.navigate("SpacesScreen")} />
                   <ActionTile icon="add-circle-outline" label="Ajouter un abonnement" onPress={() => nav.navigate("AddSubscription")} />
+                  <ActionTile icon="person-outline" label="Mon profil" onPress={() => nav.navigate("Profile")} />
                 </>
               )}
             </View>
@@ -126,7 +129,7 @@ export default function HomeScreen() {
                   <Text style={{ color: "#9a9a9a", fontSize: 13, flexShrink: 1 }}>{t}</Text>
                 </View>
               ))}
-              {!isAuthenticated ? (
+              {!isLogged ? (
                 <TouchableOpacity style={{ marginTop: 10, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: GREEN }} onPress={() => nav.navigate("Register")}>
                   <Text style={{ color: "#000", fontWeight: "800" }}>Créer mon compte</Text>
                   <Ionicons name="arrow-forward" size={18} color="#000" />
@@ -142,7 +145,7 @@ export default function HomeScreen() {
         </View>
 
         {/* FOOTER CTAs */}
-        {!loading && (!isAuthenticated ? (
+        {!loading && (!isLogged ? (
           <View style={{ flexDirection: "row", gap: 12, justifyContent: "center", marginTop: 8 }}>
             <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 16, borderWidth: 1, borderColor: BORDER, minWidth: 160, justifyContent: "center", backgroundColor: GREEN }} onPress={() => nav.navigate("Login")}>
               <Ionicons name="log-in-outline" size={18} color="#000" />
