@@ -133,6 +133,7 @@ export default function NotificationsScreen() {
   }
 
   return (
+    <RoleGuard anyOf={["ROLE_USER","ROLE_ADMIN"]}>
     <Layout header={<AppHeader />} footer={<AppFooter />} style={{ backgroundColor: "#000" }}>
       <SafeAreaView style={styles.container}>
         <View style={styles.search}>
@@ -160,5 +161,6 @@ export default function NotificationsScreen() {
         />
       </SafeAreaView>
     </Layout>
+    </RoleGuard>
   );
 }

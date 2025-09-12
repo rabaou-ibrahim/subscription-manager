@@ -13,6 +13,8 @@ import AppFooter from "../../ui/AppFooter";
 import useAuth from "../../hooks/useAuth";
 import { json } from "../../services/http";
 
+import RoleGuard from "../../guards/RoleGuard";
+
 const money = (amount, currency = "EUR") =>
   amount == null
     ? "—"
@@ -157,6 +159,7 @@ export default function ActiveSubscriptionScreen() {
   };
 
   return (
+    <RoleGuard anyOf={["ROLE_USER","ROLE_ADMIN"]}>
     <Layout scroll={false} header={<AppHeader />} footer={<AppFooter />} style={{ backgroundColor: "#000" }}>
       <View style={s.container}>
         {/* Pills filtre d’étendue (admin) */}
@@ -208,6 +211,7 @@ export default function ActiveSubscriptionScreen() {
         )}
       </View>
     </Layout>
+    </RoleGuard>
   );
 }
 

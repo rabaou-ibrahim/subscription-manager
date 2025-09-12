@@ -15,6 +15,8 @@ import useAuth from "../../hooks/useAuth";
 import { json } from "../../services/http";
 import styles from "../../styles/SubscriptionListStyles";
 
+import RoleGuard from "../../guards/RoleGuard";
+
 export default function SubscriptionListScreen() {
   const navigation = useNavigation();
   const route = useRoute();
@@ -171,6 +173,7 @@ export default function SubscriptionListScreen() {
   }
 
   return (
+    <RoleGuard anyOf={["ROLE_USER","ROLE_ADMIN"]}>
     <Layout header={<AppHeader />} footer={<AppFooter />} style={{ backgroundColor: "#000" }}>
       <SafeAreaView style={styles.container}>
         <View style={styles.searchContainer}>
@@ -204,5 +207,6 @@ export default function SubscriptionListScreen() {
         />
       </SafeAreaView>
     </Layout>
+    </RoleGuard>
   );
 }
