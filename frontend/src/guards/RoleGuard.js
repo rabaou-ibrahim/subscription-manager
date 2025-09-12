@@ -1,47 +1,81 @@
-// frontend/src/guards/RoleGuard.js
+// src/guards/RoleGuard.js
 import React from "react";
 import { View, Text, TouchableOpacity } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import useAuth from "../hooks/useAuth";
 
-export default function RoleGuard({ roles = [], children }) {
+export default function RoleGuard({
+  anyOf = [],     // au moins un de ces rôles
+  allOf = [],     // et (optionnel) tous ces rôles
+  fallback = null,
+  children,
+}) {
   const nav = useNavigation();
-  const { loading, isAuthenticated, hasAnyRole } = useAuth();
+  const { ready, isLogged, roles } = useAuth();
 
-  if (loading) return null; // splash/loader géré ailleurs si tu veux
+  // attente de l’hydratation du contexte auth
+  if (!ready) return null;
 
-  if (!isAuthenticated) {
+  // non connecté → invite à se connecter
+  if (!isLogged) {
     return (
-      <Blocked
-        title="Accès restreint"
-        subtitle="Connecte-toi pour accéder à cette page."
-        action={() => nav.navigate("Login")}
-        actionLabel="Se connecter"
-      />
+      fallback ?? (
+        <Blocked
+          title="Accès restreint"
+          subtitle="Connecte-toi pour accéder à cette page."
+          action={() => nav.navigate("Login")}
+          actionLabel="Se connecter"
+        />
+      )
     );
   }
-  if (roles.length && !hasAnyRole(roles)) {
+
+  const myRoles = Array.isArray(roles) ? roles : [];
+  const hasAny = anyOf.length ? anyOf.some((r) => myRoles.includes(r)) : true;
+  const hasAll = allOf.length ? allOf.every((r) => myRoles.includes(r)) : true;
+
+  if (!(hasAny && hasAll)) {
     return (
-      <Blocked
-        title="Permissions insuffisantes"
-        subtitle="Tu n’as pas les droits requis pour cette section."
-        action={() => nav.navigate("Home")}
-        actionLabel="Revenir à l’accueil"
-      />
+      fallback ?? (
+        <Blocked
+          title="Permissions insuffisantes"
+          subtitle="Tu n’as pas les droits requis pour cette section."
+          action={() => nav.navigate("Home")}
+          actionLabel="Revenir à l’accueil"
+        />
+      )
     );
   }
+
   return <>{children}</>;
 }
 
 function Blocked({ title, subtitle, action, actionLabel }) {
   return (
-    <View style={{ flex: 1, padding: 20, backgroundColor: "#000", alignItems: "center", justifyContent: "center" }}>
-      <Text style={{ color: "#fff", fontSize: 20, fontWeight: "800", marginBottom: 8 }}>{title}</Text>
-      <Text style={{ color: "#9aa0a6", textAlign: "center", marginBottom: 14 }}>{subtitle}</Text>
-      <TouchableOpacity onPress={action} style={{
-        backgroundColor: "#B7FF27",
-        borderRadius: 12, paddingVertical: 12, paddingHorizontal: 16
-      }}>
+    <View
+      style={{
+        flex: 1,
+        padding: 20,
+        backgroundColor: "#000",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <Text style={{ color: "#fff", fontSize: 20, fontWeight: "800", marginBottom: 8 }}>
+        {title}
+      </Text>
+      <Text style={{ color: "#9aa0a6", textAlign: "center", marginBottom: 14 }}>
+        {subtitle}
+      </Text>
+      <TouchableOpacity
+        onPress={action}
+        style={{
+          backgroundColor: "#B7FF27",
+          borderRadius: 12,
+          paddingVertical: 12,
+          paddingHorizontal: 16,
+        }}
+      >
         <Text style={{ color: "#000", fontWeight: "800" }}>{actionLabel}</Text>
       </TouchableOpacity>
     </View>

@@ -40,10 +40,12 @@ export default function LoginScreen() {
     setErr(null); setOk(null);
     try {
       await login(email.trim(), password);
+      nav.reset({ index: 0, routes: [{ name: "Home" }] }); // ou nav.replace("Home")
       setOk("Connexion réussie !");
-      setTimeout(() => nav.navigate("Home"), 400);
     } catch (e) {
-      setErr(e.message || "Échec de la connexion");
+       const msg = e?.message || "Échec de la connexion";
+       setErr(msg);                               // Snackbar
+       setErrors({ email: msg, password: " " });  // bordures rouges + message sous email
     } finally {
       setLoading(false);
     }

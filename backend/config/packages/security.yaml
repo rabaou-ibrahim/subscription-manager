@@ -1,28 +1,30 @@
+# backend/config/packages/security.yaml
 security:
   password_hashers:
     App\Entity\User: 'auto'
 
   providers:
     app_user_provider:
-      entity:
-        class: App\Entity\User
-        property: email
+      entity: { class: App\Entity\User, property: email }
 
   firewalls:
     dev:
       pattern: ^/(_(profiler|wdt)|css|images|js)/
       security: false
 
+    # ⬇️ Firewall de login (DOIT être avant "api")
     login:
-      pattern: ^/api/auth/login
+      pattern: ^/api/auth
       stateless: true
+      provider: app_user_provider
       json_login:
-        check_path: /api/auth/login_check
+        check_path: /api/auth/login     # <-- on POST ici
         username_path: email
         password_path: password
         success_handler: lexik_jwt_authentication.handler.authentication_success
         failure_handler: lexik_jwt_authentication.handler.authentication_failure
 
+    # ⬇️ Firewall JWT pour toutes les autres routes /api
     api:
       pattern: ^/api
       stateless: true
@@ -30,29 +32,6 @@ security:
       jwt: ~
 
   access_control:
-    # 🔓 Routes publiques
-    - { path: ^/api/auth/login, roles: PUBLIC_ACCESS }
-    - { path: ^/api/user/create, roles: PUBLIC_ACCESS }
-    - { path: ^/api/doc$, roles: PUBLIC_ACCESS }
-    - { path: ^/api/doc.json$, roles: PUBLIC_ACCESS }
-
-    # 🔐 Routes réservées ADMIN
-    - { path: ^/api/user/all, roles: ROLE_ADMIN }
-    - { path: ^/api/user/delete, roles: ROLE_ADMIN }
-    - { path: ^/api/user/.+/promote, roles: ROLE_ADMIN }
-    - { path: ^/api/user/.+/demote, roles: ROLE_ADMIN }
-    - { path: ^/api/member/delete, roles: ROLE_ADMIN }
-    - { path: ^/api/space/delete, roles: ROLE_ADMIN }
-    - { path: ^/api/subscription/delete, roles: ROLE_ADMIN }
-    - { path: ^/api/tag/delete, roles: ROLE_ADMIN }
-    - { path: ^/api/service/delete, roles: ROLE_ADMIN }
-    - { path: ^/api/payment/delete, roles: ROLE_ADMIN }
-    - { path: ^/api/category/delete, roles: ROLE_ADMIN }
-    - { path: ^/api/notification/delete, roles: ROLE_ADMIN }
-    - { path: ^/api/permission/assign, roles: ROLE_ADMIN }
-    - { path: ^/api/permission/revoke, roles: ROLE_ADMIN }
-    - { path: ^/api/invite/\d+/(accept|decline)$, roles: IS_AUTHENTICATED_FULLY }
-
-
-    # 🔐 Accès authentifié
+    - { path: ^/api/auth/login$, roles: PUBLIC_ACCESS, methods: [POST] } # public
+    - { path: ^/api/user/create$, roles: PUBLIC_ACCESS, methods: [POST] }
     - { path: ^/api, roles: IS_AUTHENTICATED_FULLY }

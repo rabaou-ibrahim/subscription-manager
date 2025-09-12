@@ -117,19 +117,26 @@ class UserController extends AbstractController
     {
         /** @var User|null $user */
         $user = $this->getUser();
-
         if (!$user) {
             return $this->json(['error' => 'Non authentifié'], Response::HTTP_UNAUTHORIZED);
         }
 
         return $this->json([
-            'id'        => $user->getId(),
-            'firstname' => $user->getFirstname(),
-            'lastname'  => $user->getLastname(),
-            'email'     => $user->getEmail(),
-            'roles'     => $user->getRoles(),
+            'id'           => $user->getId(),
+            'firstname'    => $user->getFirstname(),
+            'lastname'     => $user->getLastname(),
+            'email'        => $user->getEmail(),
+            'username'     => $user->getUsername(),
+            'avatar'       => $user->getAvatar(),
+            'phone_number' => $user->getPhoneNumber(),
+            'age'          => $user->getAge(),
+            'roles'        => $user->getRoles(),
+            'is_active'    => $user->isActive(),
+            'created_at'   => $user->getCreatedAt()?->format('c'),
+            'updated_at'   => $user->getUpdatedAt()?->format('c'),
         ]);
-    }
+}
+
 
     #[Route('/{id}', name: 'get_user_by_id', methods: ['GET'], requirements: ['id' => '[0-9a-fA-F-]{36}'])]
     #[IsGranted('IS_AUTHENTICATED_FULLY')]
