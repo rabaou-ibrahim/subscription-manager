@@ -13,6 +13,8 @@ import useAuth from "../../hooks/useAuth";
 import { json } from "../../services/http";
 import styles from "../../styles/SubscriptionDetailsStyles";
 
+import RoleGuard from "../../guards/RoleGuard";
+
 const fmtPrice = (amount, currency = "EUR") => {
   if (amount == null) return "—";
   try {
@@ -145,6 +147,7 @@ export default function SubscriptionDetailsScreen() {
   const end   = sub.end_date   ? new Date(sub.end_date).toLocaleDateString("fr-FR")   : "—";
 
   return (
+    <RoleGuard anyOf={["ROLE_USER","ROLE_ADMIN"]}>
     <Layout header={<AppHeader />} footer={<AppFooter />} style={{ backgroundColor: "#000" }}>
       <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 24 }}>
         {/* Header local */}
@@ -241,5 +244,6 @@ export default function SubscriptionDetailsScreen() {
         </View>
       </ScrollView>
     </Layout>
+    </RoleGuard>
   );
 }

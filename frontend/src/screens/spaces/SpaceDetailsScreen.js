@@ -15,6 +15,8 @@ import useAuth from "../../hooks/useAuth";
 import { json } from "../../services/http";
 import styles from "../../styles/SpaceDetailsStyles";
 
+import RoleGuard from "../../guards/RoleGuard";
+
 export default function SpaceDetailsScreen() {
   const navigation = useNavigation();
   const route = useRoute();
@@ -173,12 +175,13 @@ export default function SpaceDetailsScreen() {
           <ActivityIndicator />
           <Text style={{ color: "#9aa0a6", marginTop: 8 }}>Chargement…</Text>
         </View>
-      </Layout>
+      </Layout>  
     );
   }
 
   if (!space) {
     return (
+      <RoleGuard anyOf={["ROLE_USER","ROLE_ADMIN"]}>
       <Layout header={<AppHeader />} footer={<AppFooter />} style={{ backgroundColor: "#000" }}>
         <View style={{ flex: 1, padding: 16 }}>
           <Text style={{ color: "#fff" }}>Espace introuvable.</Text>
@@ -190,10 +193,12 @@ export default function SpaceDetailsScreen() {
           </TouchableOpacity>
         </View>
       </Layout>
+      </RoleGuard>
     );
   }
 
   return (
+    <RoleGuard anyOf={["ROLE_USER","ROLE_ADMIN"]}>
     <Layout header={<AppHeader />} footer={<AppFooter />} style={{ backgroundColor: "#000" }}>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 24 }}>
         {/* Infos espace */}
@@ -394,5 +399,6 @@ export default function SpaceDetailsScreen() {
         </View>
       </Modal>
     </Layout>
+    </RoleGuard>
   );
 }

@@ -12,6 +12,8 @@ import styles from "../../styles/SpacesStyles";
 import useAuth from "../../hooks/useAuth";
 import { json } from "../../services/http";
 
+import RoleGuard from "../../guards/RoleGuard";
+
 export default function SpacesScreen() {
   const navigation = useNavigation();
   const { token, isLogged } = useAuth();
@@ -55,6 +57,7 @@ export default function SpacesScreen() {
   }
 
   return (
+    <RoleGuard anyOf={["ROLE_USER","ROLE_ADMIN"]}>
     <Layout scroll={false} header={<AppHeader />} footer={<AppFooter />} style={{ backgroundColor: "#000" }}>
       <View style={styles.container}>
         {/* Tabs */}
@@ -120,5 +123,6 @@ export default function SpacesScreen() {
         />
       </View>
     </Layout>
+    </RoleGuard>
   );
 }

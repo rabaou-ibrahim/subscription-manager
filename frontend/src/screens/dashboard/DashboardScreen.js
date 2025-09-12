@@ -8,6 +8,7 @@ import Layout from "../../ui/Layout";
 import AppHeader from "../../ui/AppHeader";
 import AppFooter from "../../ui/AppFooter";
 import useAuth from "../../hooks/useAuth";
+import RoleGuard from "../../guards/RoleGuard";
 import { json } from "../../services/http";
 import styles from "../../styles/DashboardStyles";
 
@@ -173,6 +174,7 @@ export default function DashboardScreen() {
 
   // -------------------- UI --------------------
   return (
+    <RoleGuard anyOf={["ROLE_USER","ROLE_ADMIN"]}>
     <Layout scroll={false} header={<AppHeader />} footer={<AppFooter />}>
       <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 32 }}>
         {/* Onglets */}
@@ -341,5 +343,6 @@ export default function DashboardScreen() {
         <Ionicons name="add" size={26} color="#000" />
       </TouchableOpacity>
     </Layout>
+    </RoleGuard>
   );
 }

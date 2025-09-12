@@ -17,6 +17,8 @@ import useAuth from "../../hooks/useAuth";
 import { json } from "../../services/http";
 import styles from "../../styles/AddSubscriptionStyles";
 
+import RoleGuard from "../../guards/RoleGuard";
+
 // si tu as un util pour l’icône des services, garde-le, sinon enlève l’import
 // import { getServiceIconUrl } from "../../utils/serviceIcon";
 
@@ -206,6 +208,7 @@ export default function AddSubscriptionScreen() {
   const placeholderCol = "#8e8e8e";
 
   return (
+    <RoleGuard anyOf={["ROLE_USER","ROLE_ADMIN"]}>
     <Layout
       scroll={false}
       header={<AppHeader />}
@@ -440,5 +443,6 @@ export default function AddSubscriptionScreen() {
         )}
       </SafeAreaView>
     </Layout>
+    </RoleGuard>  
   );
 }
