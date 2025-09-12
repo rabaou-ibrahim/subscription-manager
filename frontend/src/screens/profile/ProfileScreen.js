@@ -162,165 +162,167 @@ export default function ProfileScreen() {
   }
 
   return (
-    <Layout header={<AppHeader />} footer={<AppFooter />} style={{ backgroundColor: "#000" }}>
-      <SafeAreaView style={[styles.container, { backgroundColor: "#000" }]}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={{ flex: 1 }}
-        >
-          <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-            <Text style={styles.title}>Mon profil</Text>
+    <RoleGuard anyOf={["ROLE_USER","ROLE_ADMIN"]}>
+      <Layout header={<AppHeader />} footer={<AppFooter />} style={{ backgroundColor: "#000" }}>
+        <SafeAreaView style={[styles.container, { backgroundColor: "#000" }]}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            style={{ flex: 1 }}
+          >
+            <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
+              <Text style={styles.title}>Mon profil</Text>
 
-            {/* Identité */}
-            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
-              <View style={styles.avatar}>
-                {avatarUri && imgOk ? (
-                  <Image
-                    source={{ uri: avatarUri }}
-                    style={styles.avatarImg}
-                    resizeMode="cover"
-                    onError={() => setImgOk(false)}
-                    onLoad={() => setImgOk(true)}
-                  />
-                ) : (
-                  <Text style={styles.avatarText}>{initial}</Text>
-                )}
-              </View>
+              {/* Identité */}
+              <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
+                <View style={styles.avatar}>
+                  {avatarUri && imgOk ? (
+                    <Image
+                      source={{ uri: avatarUri }}
+                      style={styles.avatarImg}
+                      resizeMode="cover"
+                      onError={() => setImgOk(false)}
+                      onLoad={() => setImgOk(true)}
+                    />
+                  ) : (
+                    <Text style={styles.avatarText}>{initial}</Text>
+                  )}
+                </View>
 
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={styles.nameLine}>
-                  {[firstname, lastname].filter(Boolean).join(" ") ||
-                    username ||
-                    "Utilisateur"}
-                </Text>
-                <Text style={styles.muted}>{email || "—"}</Text>
-              </View>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.nameLine}>
+                    {[firstname, lastname].filter(Boolean).join(" ") ||
+                      username ||
+                      "Utilisateur"}
+                  </Text>
+                  <Text style={styles.muted}>{email || "—"}</Text>
+                </View>
 
-              {!edit ? (
-                <TouchableOpacity
-                  onPress={() => setEdit(true)}
-                  style={[styles.btn, styles.btnGhost]}
-                >
-                  <Ionicons name="create-outline" size={16} color="#B7FF27" />
-                  <Text style={styles.btnGhostText}>Modifier</Text>
-                </TouchableOpacity>
-              ) : null}
-            </View>
-
-            {/* Rôles */}
-            <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Rôles</Text>
-              <Text style={styles.muted}>
-                {Array.isArray(user?.roles)
-                  ? user.roles.join(", ")
-                  : user?.role || "ROLE_USER"}
-              </Text>
-            </View>
-
-            {/* Formulaire d’édition */}
-            {edit && (
-              <View style={styles.card}>
-                <Field label="Prénom">
-                  <TextInput
-                    value={firstname}
-                    onChangeText={setFirstname}
-                    placeholder="Prénom"
-                    placeholderTextColor="#777"
-                    style={inputStyle}
-                  />
-                </Field>
-                <Field label="Nom">
-                  <TextInput
-                    value={lastname}
-                    onChangeText={setLastname}
-                    placeholder="Nom"
-                    placeholderTextColor="#777"
-                    style={inputStyle}
-                  />
-                </Field>
-                <Field label="Email">
-                  <TextInput
-                    value={email}
-                    onChangeText={setEmail}
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                    placeholder="vous@exemple.com"
-                    placeholderTextColor="#777"
-                    style={inputStyle}
-                  />
-                </Field>
-                <Field label="Username">
-                  <TextInput
-                    value={username}
-                    onChangeText={setUsername}
-                    autoCapitalize="none"
-                    placeholder="username"
-                    placeholderTextColor="#777"
-                    style={inputStyle}
-                  />
-                </Field>
-                <Field label="Téléphone">
-                  <TextInput
-                    value={phone}
-                    onChangeText={setPhone}
-                    keyboardType="phone-pad"
-                    placeholder="+33…"
-                    placeholderTextColor="#777"
-                    style={inputStyle}
-                  />
-                </Field>
-                <Field label="Âge">
-                  <TextInput
-                    value={age}
-                    onChangeText={setAge}
-                    keyboardType="number-pad"
-                    placeholder="ex: 30"
-                    placeholderTextColor="#777"
-                    style={inputStyle}
-                  />
-                </Field>
-              </View>
-            )}
-
-            {/* Messages */}
-            {err ? <Text style={styles.error}>{err}</Text> : null}
-            {ok ? <Text style={styles.success}>{ok}</Text> : null}
-
-            {/* Actions */}
-            <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
-              {edit ? (
-                <>
+                {!edit ? (
                   <TouchableOpacity
-                    onPress={onSave}
-                    disabled={saving}
-                    style={[styles.btn, styles.btnPrimary, saving && styles.btnDisabled]}
-                  >
-                    <Ionicons name="save-outline" size={16} color="#000" />
-                    <Text style={styles.btnPrimaryText}>
-                      {saving ? "Enregistrement…" : "Enregistrer"}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setEdit(false);
-                      load();
-                    }}
+                    onPress={() => setEdit(true)}
                     style={[styles.btn, styles.btnGhost]}
                   >
-                    <Text style={styles.btnGhostText}>Annuler</Text>
+                    <Ionicons name="create-outline" size={16} color="#B7FF27" />
+                    <Text style={styles.btnGhostText}>Modifier</Text>
                   </TouchableOpacity>
-                </>
-              ) : (
-                <TouchableOpacity onPress={onLogout} style={[styles.btn, styles.btnDanger]}>
-                  <Ionicons name="log-out-outline" size={16} color="#fff" />
-                  <Text style={styles.btnDangerText}>Se déconnecter</Text>
-                </TouchableOpacity>
+                ) : null}
+              </View>
+
+              {/* Rôles */}
+              <View style={styles.card}>
+                <Text style={styles.sectionTitle}>Rôles</Text>
+                <Text style={styles.muted}>
+                  {Array.isArray(user?.roles)
+                    ? user.roles.join(", ")
+                    : user?.role || "ROLE_USER"}
+                </Text>
+              </View>
+
+              {/* Formulaire d’édition */}
+              {edit && (
+                <View style={styles.card}>
+                  <Field label="Prénom">
+                    <TextInput
+                      value={firstname}
+                      onChangeText={setFirstname}
+                      placeholder="Prénom"
+                      placeholderTextColor="#777"
+                      style={inputStyle}
+                    />
+                  </Field>
+                  <Field label="Nom">
+                    <TextInput
+                      value={lastname}
+                      onChangeText={setLastname}
+                      placeholder="Nom"
+                      placeholderTextColor="#777"
+                      style={inputStyle}
+                    />
+                  </Field>
+                  <Field label="Email">
+                    <TextInput
+                      value={email}
+                      onChangeText={setEmail}
+                      autoCapitalize="none"
+                      keyboardType="email-address"
+                      placeholder="vous@exemple.com"
+                      placeholderTextColor="#777"
+                      style={inputStyle}
+                    />
+                  </Field>
+                  <Field label="Username">
+                    <TextInput
+                      value={username}
+                      onChangeText={setUsername}
+                      autoCapitalize="none"
+                      placeholder="username"
+                      placeholderTextColor="#777"
+                      style={inputStyle}
+                    />
+                  </Field>
+                  <Field label="Téléphone">
+                    <TextInput
+                      value={phone}
+                      onChangeText={setPhone}
+                      keyboardType="phone-pad"
+                      placeholder="+33…"
+                      placeholderTextColor="#777"
+                      style={inputStyle}
+                    />
+                  </Field>
+                  <Field label="Âge">
+                    <TextInput
+                      value={age}
+                      onChangeText={setAge}
+                      keyboardType="number-pad"
+                      placeholder="ex: 30"
+                      placeholderTextColor="#777"
+                      style={inputStyle}
+                    />
+                  </Field>
+                </View>
               )}
-            </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    </Layout>
+
+              {/* Messages */}
+              {err ? <Text style={styles.error}>{err}</Text> : null}
+              {ok ? <Text style={styles.success}>{ok}</Text> : null}
+
+              {/* Actions */}
+              <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
+                {edit ? (
+                  <>
+                    <TouchableOpacity
+                      onPress={onSave}
+                      disabled={saving}
+                      style={[styles.btn, styles.btnPrimary, saving && styles.btnDisabled]}
+                    >
+                      <Ionicons name="save-outline" size={16} color="#000" />
+                      <Text style={styles.btnPrimaryText}>
+                        {saving ? "Enregistrement…" : "Enregistrer"}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setEdit(false);
+                        load();
+                      }}
+                      style={[styles.btn, styles.btnGhost]}
+                    >
+                      <Text style={styles.btnGhostText}>Annuler</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <TouchableOpacity onPress={onLogout} style={[styles.btn, styles.btnDanger]}>
+                    <Ionicons name="log-out-outline" size={16} color="#fff" />
+                    <Text style={styles.btnDangerText}>Se déconnecter</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Layout>
+    </RoleGuard>
   );
 }
 

@@ -91,66 +91,68 @@ export default function SpaceCreateScreen() {
   };
 
   return (
-    <Layout
-      scroll={false}
-      header={<AppHeader />}
-      footer={<AppFooter />}
-      style={{ backgroundColor: "#000" }}
-    >
-      <View style={styles.container}>
-        <Text style={styles.title}>Créer un espace</Text>
+    <RoleGuard anyOf={["ROLE_USER","ROLE_ADMIN"]}>
+      <Layout
+        scroll={false}
+        header={<AppHeader />}
+        footer={<AppFooter />}
+        style={{ backgroundColor: "#000" }}
+      >
+        <View style={styles.container}>
+          <Text style={styles.title}>Créer un espace</Text>
 
-        <Text style={styles.label}>Nom</Text>
-        <TextInput
-          value={name}
-          onChangeText={setName}
-          placeholder="Ex: Famille, Coloc, Projet…"
-          placeholderTextColor="#777"
-          style={styles.input}
-        />
+          <Text style={styles.label}>Nom</Text>
+          <TextInput
+            value={name}
+            onChangeText={setName}
+            placeholder="Ex: Famille, Coloc, Projet…"
+            placeholderTextColor="#777"
+            style={styles.input}
+          />
 
-        <Snackbar visible={!!formError} onDismiss={() => setFormError(null)}>
-          {formError}
-        </Snackbar>
+          <Snackbar visible={!!formError} onDismiss={() => setFormError(null)}>
+            {formError}
+          </Snackbar>
 
-        <Text style={styles.label}>Description (optionnel)</Text>
-        <TextInput
-          value={description}
-          onChangeText={setDescription}
-          placeholder="Quelques mots…"
-          placeholderTextColor="#777"
-          style={[styles.input, { height: 100 }]}
-          multiline
-        />
+          <Text style={styles.label}>Description (optionnel)</Text>
+          <TextInput
+            value={description}
+            onChangeText={setDescription}
+            placeholder="Quelques mots…"
+            placeholderTextColor="#777"
+            style={[styles.input, { height: 100 }]}
+            multiline
+          />
 
-        <Text style={styles.label}>Visibilité</Text>
-        <TouchableOpacity
-          style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
-          onPress={() => setShowVis(true)}
-        >
-          <Text style={{ color: "#fff" }}>{visibility === "public" ? "Public" : "Privé"}</Text>
-          <Text style={{ color: "#A6FF00", fontWeight: "700" }}>Choisir</Text>
-        </TouchableOpacity>
+          <Text style={styles.label}>Visibilité</Text>
+          <TouchableOpacity
+            style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
+            onPress={() => setShowVis(true)}
+          >
+            <Text style={{ color: "#fff" }}>{visibility === "public" ? "Public" : "Privé"}</Text>
+            <Text style={{ color: "#A6FF00", fontWeight: "700" }}>Choisir</Text>
+          </TouchableOpacity>
 
-        <ModalSelect
-          visible={showVis}
-          title="Visibilité"
-          options={["private", "public"]}
-          value={visibility}
-          onChange={(v) => { setVisibility(v); setShowVis(false); }}
-          onClose={() => setShowVis(false)}
-          compact
-          columns={2}
-        />
+          <ModalSelect
+            visible={showVis}
+            title="Visibilité"
+            options={["private", "public"]}
+            value={visibility}
+            onChange={(v) => { setVisibility(v); setShowVis(false); }}
+            onClose={() => setShowVis(false)}
+            compact
+            columns={2}
+          />
 
-        <TouchableOpacity style={styles.cta} onPress={onSubmit} disabled={pending}>
-          <Text style={styles.ctaText}>{pending ? "Création..." : "Créer"}</Text>
-        </TouchableOpacity>
+          <TouchableOpacity style={styles.cta} onPress={onSubmit} disabled={pending}>
+            <Text style={styles.ctaText}>{pending ? "Création..." : "Créer"}</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={styles.link} onPress={() => navigation.goBack()}>
-          <Text style={styles.linkText}>Annuler</Text>
-        </TouchableOpacity>
-      </View>
-    </Layout>
+          <TouchableOpacity style={styles.link} onPress={() => navigation.goBack()}>
+            <Text style={styles.linkText}>Annuler</Text>
+          </TouchableOpacity>
+        </View>
+      </Layout>
+    </RoleGuard>
   );
 }
