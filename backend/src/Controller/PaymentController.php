@@ -95,9 +95,18 @@ class PaymentController extends AbstractController
      * @OA\Get(path="/api/payment/all", summary="Récupérer tous les paiements")
      */
     #[Route('/all', name: 'get_all_payments', methods: ['GET'])]
-    public function getAllPayments(PaymentRepository $paymentRepository): JsonResponse
+    public function getAllPayments(Request $req, PaymentRepository $paymentRepository): JsonResponse
     {
-        $payments = $paymentRepository->findAll();
+        $subId = $req->query->get('subscriptionId');
+        if ($subId) {
+            $qb = $paymentRepository->createQueryBuilder('p')
+                ->join('p.subscription','s')
+                ->andWhere('s.id = :sid')->setParameter('sid', $subId)
+                ->orderBy('p.created_at','DESC');
+            $payments = $qb->getQuery()->getResult();
+        } else {
+            $payments = $paymentRepository->findBy([], ['created_at' => 'DESC']);
+        }
 
         $response = array_map(fn($payment) => [
             'id' => $payment->getId(),
@@ -110,6 +119,7 @@ class PaymentController extends AbstractController
 
         return $this->json($response, Response::HTTP_OK);
     }
+
 
     /**
      * @OA\Get(path="/api/payment/{id}", summary="Récupérer un paiement par ID")
@@ -147,17 +157,70 @@ class PaymentController extends AbstractController
             return $this->json(['error' => 'Paiement non trouvé'], Response::HTTP_NOT_FOUND);
         }
 
-        $data = json_decode($request->getContent(), true);
+        $data = json_decode($request->getContent(), true) ?? [];
 
-        $payment->setAmount($data['amount'] ?? $payment->getAmount());
-        $payment->setCurrency($data['currency'] ?? $payment->getCurrency());
-        $payment->setPaymentMethod($data['payment_method'] ?? $payment->getPaymentMethod());
-        $payment->setStatus($data['status'] ?? $payment->getStatus());
+        // On ne change pas le montant/la devise via update (évite les surprises)
+        if (array_key_exists('payment_method', $data)) {
+            $payment->setPaymentMethod($data['payment_method']);
+        }
+
+        if (array_key_exists('transaction_id', $data)) {
+            $payment->setTransactionId($data['transaction_id'] ?: null);
+        }
+
+        if (array_key_exists('status', $data)) {
+            $status = $data['status'];
+
+            if ($status === Payment::STATUS_COMPLETED) {
+                $payment->markAsCompleted();
+
+                // Effets sur la souscription
+                $sub = $payment->getSubscription();
+                if ($sub) {
+                    // Status actif
+                    if (method_exists($sub, 'setStatus')) {
+                        $sub->setStatus('active');
+                    }
+
+                    // Démarrage si manquant (ton UI lit start_date/end_date)
+                    $now = new \DateTimeImmutable();
+                    // compatibilité : start_date ou startedAt selon ta classe
+                    if (method_exists($sub, 'getStartDate') && method_exists($sub, 'setStartDate')) {
+                        if (!$sub->getStartDate()) $sub->setStartDate($now);
+                    } elseif (method_exists($sub, 'getStartedAt') && method_exists($sub, 'setStartedAt')) {
+                        if (!$sub->getStartedAt()) $sub->setStartedAt($now);
+                    }
+
+                    // Prochain renouvellement si tu as ces champs
+                    if (method_exists($sub, 'getBillingFrequency') && method_exists($sub, 'setNextRenewalAt')) {
+                        $bf = $sub->getBillingFrequency(); // 'monthly' | 'yearly' | …
+                        $interval = $bf === 'yearly' ? 'P1Y' : 'P1M';
+                        $sub->setNextRenewalAt($now->add(new \DateInterval($interval)));
+                    }
+                }
+            } elseif ($status === Payment::STATUS_FAILED) {
+                $payment->markAsFailed();
+            } elseif ($status === Payment::STATUS_CANCELLED) {
+                $payment->cancelPayment();
+            } else {
+                // autre status => setter classique si besoin
+                $payment->setStatus($status);
+            }
+        }
 
         $entityManager->flush();
 
-        return $this->json(['message' => 'Paiement mis à jour avec succès'], Response::HTTP_OK);
+        return $this->json([
+            'message' => 'Paiement mis à jour avec succès',
+            'payment' => [
+                'id' => $payment->getId(),
+                'status' => $payment->getStatus(),
+                'transaction_id' => $payment->getTransactionId(),
+                'subscription_id' => $payment->getSubscription()->getId(),
+            ]
+        ], Response::HTTP_OK);
     }
+
 
     /**
      * @OA\Delete(path="/api/payment/delete/{id}", summary="Supprimer un paiement")
