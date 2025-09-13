@@ -1,4 +1,5 @@
-import { json } from "../services/http";
+// src/services/notifications.js
+import { json } from "./http";
 
 export async function listNotifications(headers = {}) {
   const data = await json("/api/notification/all", { headers });

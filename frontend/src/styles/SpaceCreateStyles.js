@@ -46,4 +46,29 @@ export default StyleSheet.create({
 
   error: { color: "#ff6b6b", marginTop: 4, marginBottom: 8 },
   success: { color: "#72CE1D", marginTop: 4, marginBottom: 8 },
+  title: { color: "#fff", fontSize: 20, fontWeight: "700", marginBottom: 16 },
+label: { color: "#c8c8c8", marginBottom: 6, marginTop: 10 }, // un peu plus d’air
+input: {
+  color: "#fff",
+  backgroundColor: "#1a1a1a",
+  borderWidth: 1,
+  borderColor: "#2a2a2a",
+  borderRadius: 10,
+  paddingHorizontal: 12,
+  paddingVertical: 10,
+  marginBottom: 6,
+},
+cta: {
+  backgroundColor: "#A6FF00",
+  borderRadius: 10,
+  alignItems: "center",
+  paddingVertical: 12,
+  flexDirection: "row",
+  justifyContent: "center",
+  gap: 8,
+},
+ctaText: { color: "#000", fontWeight: "700" },
+link: { alignItems: "center", paddingVertical: 10 },
+linkText: { color: "#A6FF00", fontWeight: "700" },
+
 });
