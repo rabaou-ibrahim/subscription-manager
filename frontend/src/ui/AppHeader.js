@@ -57,6 +57,9 @@ export default function AppHeader() {
           ) : (
             <>
               <RoleBadge style={{ marginLeft: 4 }} />
+              <TouchableOpacity onPress={() => navigation.navigate("Notifications")} style={{ padding: 6 }}>
+                <Ionicons name="notifications-outline" size={20} color="#A6FF00" />
+              </TouchableOpacity>
               <HeaderBtn label="Dashboard" icon="speedometer-outline" onPress={() => navigation.navigate("Dashboard")} compact={isSmall} />
               <HeaderBtn label="Abonnements" icon="albums-outline" onPress={() => navigation.navigate("SubscriptionList")} compact={isSmall} />
               <HeaderBtn label="Profil" icon="person-outline" onPress={() => navigation.navigate("Profile")} compact={isSmall} />

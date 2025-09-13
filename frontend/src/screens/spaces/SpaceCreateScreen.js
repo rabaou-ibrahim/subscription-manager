@@ -1,6 +1,7 @@
-// src/components/screens/SpaceCreateScreen.js
+// src/screens/spaces/SpaceCreateScreen.js
 import React, { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, Alert, Platform } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, Alert, ScrollView } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { Snackbar } from "react-native-paper";
 
@@ -12,7 +13,6 @@ import ModalSelect from "../../ui/ModalSelect";
 import useAuth from "../../hooks/useAuth";
 import { json } from "../../services/http";
 import styles from "../../styles/SpaceCreateStyles";
-
 import RoleGuard from "../../guards/RoleGuard";
 
 export default function SpaceCreateScreen() {
@@ -22,6 +22,7 @@ export default function SpaceCreateScreen() {
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [logo, setLogo] = useState("");
   const [visibility, setVisibility] = useState("private");
   const [showVis, setShowVis] = useState(false);
 
@@ -30,7 +31,7 @@ export default function SpaceCreateScreen() {
 
   const onSubmit = async () => {
     if (!name.trim()) {
-      (typeof window !== "undefined" ? window.alert : Alert.alert)("Nom requis", "Merci de saisir un nom.");
+      Alert.alert("Nom requis", "Merci de saisir un nom.");
       return;
     }
 
@@ -45,7 +46,7 @@ export default function SpaceCreateScreen() {
         body: JSON.stringify({
           name: name.trim(),
           description: description.trim() || null,
-          logo: "default.png",
+          logo: (logo && logo.trim()) ? logo.trim() : "default.png",
           visibility,
           status: "active",
         }),
@@ -55,38 +56,33 @@ export default function SpaceCreateScreen() {
       const spaceId = spaceObj?.id;
       if (!spaceId) throw new Error("ID de l'espace introuvable après création.");
 
-      // 2) Récupérer mon nom (optionnel)
-      let displayName = "Moi";
+      // 2) Me créer comme membre (owner/self) — IMPORTANT: passer user_id
       try {
         const me = await json("/api/user/me", { headers: { ...authHeaders } });
-        displayName =
+        const displayName =
           [me?.firstname, me?.lastname].filter(Boolean).join(" ") ||
-          me?.email ||
-          "Moi";
-      } catch (_) {}
+          me?.email || "Moi";
 
-      // 3) Me créer comme membre (owner/self)
-      try {
         await json("/api/member/create", {
           method: "POST",
           headers: { "Content-Type": "application/json", ...authHeaders },
           body: JSON.stringify({
-            name: displayName,        // requis
-            relationship: "self",     // clé attendue
-            space_id: String(spaceId) // clé attendue
+            space_id: String(spaceId),
+            relationship: "self",
+            name: displayName,
+            user_id: me?.id,          // 👈 évite la branche “invitation”
           }),
         });
       } catch (e) {
-        // Non bloquant : l’espace est créé quand même
         console.log("create member(owner) failed:", e?.message || e);
       }
 
-      // 4) Aller sur les détails de l’espace
+      // 3) Aller sur les détails de l’espace
       navigation.replace("SpaceDetails", { id: spaceId, refreshAt: Date.now() });
     } catch (e) {
       const msg = e?.response?.data?.error || e?.message || "Création impossible";
       setFormError(msg);
-      (typeof window !== "undefined" ? window.alert : Alert.alert)("Erreur", msg);
+      Alert.alert("Erreur", msg);
     } finally {
       setPending(false);
     }
@@ -94,16 +90,11 @@ export default function SpaceCreateScreen() {
 
   return (
     <RoleGuard anyOf={["ROLE_USER","ROLE_ADMIN"]}>
-      <Layout
-        scroll={false}
-        header={<AppHeader />}
-        footer={<AppFooter />}
-        style={{ backgroundColor: "#000" }}
-      >
-        <View style={styles.container}>
-          <Text style={styles.title}>Créer un espace</Text>
+      <Layout header={<AppHeader />} footer={<AppFooter />} style={{ backgroundColor: "#000" }}>
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 120 }}>
+          <Text style={[styles.title, { marginBottom: 18 }]}>Créer un espace</Text>
 
-          <Text style={styles.label}>Nom</Text>
+          <Text style={[styles.label, { marginTop: 4 }]}>Nom</Text>
           <TextInput
             value={name}
             onChangeText={setName}
@@ -126,6 +117,16 @@ export default function SpaceCreateScreen() {
             multiline
           />
 
+          <Text style={styles.label}>Logo (URL / nom de fichier)</Text>
+          <TextInput
+            value={logo}
+            onChangeText={setLogo}
+            placeholder="ex: monlogo.png ou https://…/logo.png"
+            placeholderTextColor="#777"
+            autoCapitalize="none"
+            style={styles.input}
+          />
+
           <Text style={styles.label}>Visibilité</Text>
           <TouchableOpacity
             style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
@@ -146,14 +147,22 @@ export default function SpaceCreateScreen() {
             columns={2}
           />
 
-          <TouchableOpacity style={styles.cta} onPress={onSubmit} disabled={pending}>
-            <Text style={styles.ctaText}>{pending ? "Création..." : "Créer"}</Text>
-          </TouchableOpacity>
+          {/* Actions */}
+          <View style={{ marginTop: 18, gap: 10 }}>
+            <TouchableOpacity
+              style={[styles.cta, pending && { opacity: 0.6 }]}
+              onPress={onSubmit}
+              disabled={pending}
+            >
+              <Ionicons name="checkmark" size={18} color="#000" />
+              <Text style={styles.ctaText}>{pending ? "Création..." : "Créer l’espace"}</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity style={styles.link} onPress={() => navigation.goBack()}>
-            <Text style={styles.linkText}>Annuler</Text>
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity style={styles.link} onPress={() => navigation.goBack()}>
+              <Text style={styles.linkText}>Annuler</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       </Layout>
     </RoleGuard>
   );

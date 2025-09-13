@@ -12,6 +12,8 @@ import useAuth from "../../hooks/useAuth";
 import styles from "../../styles/NotificationsStyles";
 import { listNotifications, markNotificationRead, deleteNotification } from "../../services/notifications";
 
+import RoleGuard from "../../guards/RoleGuard";
+
 const GREEN = "#B7FF27";
 
 export default function NotificationsScreen() {
