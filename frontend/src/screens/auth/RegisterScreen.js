@@ -76,7 +76,7 @@ export default function RegisterScreen() {
       setOk("Compte créé ! Connecte-toi maintenant.");
       setTimeout(() => nav.navigate("Login"), 700);
     } catch (e) {
-      setErr(e.message || "Inscription impossible");
+      setErr(e || "Inscription impossible");
     } finally {
       setLoading(false);
     }

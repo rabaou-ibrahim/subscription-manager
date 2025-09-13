@@ -22,75 +22,114 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  */
 class UserController extends AbstractController
 {
-    #[Route('/create', name: 'create_user', methods: ['POST'])]
-    public function createUser(
+    #[Route('/create', name: 'api_user_create', methods: ['POST'])]
+    public function create(
         Request $request,
-        EntityManagerInterface $entityManager,
-        UserPasswordHasherInterface $passwordHasher,
-        ValidatorInterface $validator,
-        LoggerInterface $logger
+        EntityManagerInterface $em,
+        UserPasswordHasherInterface $hasher,
+        ValidatorInterface $validator
     ): JsonResponse {
-        try {
-            $data = json_decode($request->getContent(), true);
-
-            if (empty($data['firstname']) || empty($data['lastname']) || empty($data['email']) || empty($data['password'])) {
-                return $this->json(['error' => 'Tous les champs requis doivent être renseignés'], Response::HTTP_BAD_REQUEST);
-            }
-
-            if ($entityManager->getRepository(User::class)->findOneBy(['email' => $data['email']])) {
-                return $this->json(['error' => 'Cet utilisateur existe déjà'], Response::HTTP_CONFLICT);
-            }
-
-            $user = new User();
-            $user->setFirstname($data['firstname']);
-            $user->setLastname($data['lastname']);
-            $user->setEmail($data['email']);
-            $user->setPhoneNumber($data['phone_number'] ?? null);
-            $user->setAvatar($data['avatar'] ?? 'default.png');
-            $user->setIsActive(true);
-
-            $availableRoles = ['ROLE_USER', 'ROLE_ADMIN'];
-            $roles = isset($data['roles']) && is_array($data['roles'])
-                ? array_intersect($data['roles'], $availableRoles)
-                : ['ROLE_USER'];
-            $user->setRoles($roles);
-
-            $hashedPassword = $passwordHasher->hashPassword($user, $data['password']);
-            $user->setPassword($hashedPassword);
-
-            $errors = $validator->validate($user);
-            if (count($errors) > 0) {
-                $validationErrors = [];
-                foreach ($errors as $error) {
-                    $validationErrors[$error->getPropertyPath()] = $error->getMessage();
-                }
-                return $this->json(['errors' => $validationErrors], Response::HTTP_BAD_REQUEST);
-            }
-
-            $entityManager->persist($user);
-            $entityManager->flush();
-
-            return $this->json([
-                'message' => 'Utilisateur créé avec succès',
-                'user' => [
-                    'id' => $user->getId(),
-                    'firstname' => $user->getFirstname(),
-                    'lastname' => $user->getLastname(),
-                    'email' => $user->getEmail(),
-                    'phone_number' => $user->getPhoneNumber(),
-                    'avatar' => $user->getAvatar(),
-                    'roles' => $user->getRoles(),
-                    'is_active' => $user->isActive(),
-                    'created_at' => $user->getCreatedAt()?->format('Y-m-d\TH:i:sP'),
-                    'updated_at' => $user->getUpdatedAt()?->format('Y-m-d\TH:i:sP')
-                ]
-            ], Response::HTTP_CREATED);
-        } catch (\Exception $e) {
-            $logger->error("Erreur lors de la création de l'utilisateur : " . $e->getMessage());
-            return $this->json(['error' => 'Erreur serveur'], Response::HTTP_INTERNAL_SERVER_ERROR);
+        // 1) Parse JSON
+        $data = json_decode($request->getContent() ?: '[]', true);
+        if (!is_array($data)) {
+            return $this->json(['error' => 'Payload JSON invalide'], 400);
         }
-    }
 
+        // 2) Normalisation / valeurs
+        $firstname = trim((string)($data['firstname'] ?? ''));
+        $lastname  = trim((string)($data['lastname'] ?? ''));
+        $email     = strtolower(trim((string)($data['email'] ?? '')));
+        $plain     = (string)($data['password'] ?? '');
+
+        $username  = isset($data['username']) && $data['username'] !== '' ? trim((string)$data['username']) : null;
+        $phone     = isset($data['phone_number']) && $data['phone_number'] !== '' ? trim((string)$data['phone_number']) : null;
+        $age       = array_key_exists('age', $data) && $data['age'] !== null && $data['age'] !== ''
+            ? (int)$data['age']
+            : null;
+        $avatar    = isset($data['avatar']) && $data['avatar'] !== '' ? trim((string)$data['avatar']) : null;
+
+        $roles     = (isset($data['roles']) && is_array($data['roles']) && count($data['roles']) > 0)
+            ? array_values(array_unique($data['roles']))
+            : ['ROLE_USER'];
+
+        $isActive  = array_key_exists('is_active', $data) ? (bool)$data['is_active'] : true;
+
+        // Règle métier explicite (en plus de l’Assert\Expression)
+        if ($username !== null && strcasecmp($username, $email) === 0) {
+            return $this->json(['error' => "L'email et le pseudo doivent être différents."], 422);
+        }
+
+        // 3) Hydrate l’entité
+        $user = (new User())
+            ->setFirstname($firstname)
+            ->setLastname($lastname)
+            ->setEmail($email)
+            ->setUsername($username)
+            ->setPhoneNumber($phone)
+            ->setAge($age)
+            ->setAvatar($avatar)
+            ->setRoles($roles)
+            ->setIsActive($isActive);
+
+        // 4) Hash du mot de passe (obligatoire)
+        $hash = $hasher->hashPassword($user, $plain);
+        $user->setPassword($hash);
+
+        // 5) Validation Symfony (annotations de l’entité)
+        $violations = $validator->validate($user);
+        if (count($violations) > 0) {
+            $errs = [];
+            /** @var ConstraintViolationInterface $v */
+            foreach ($violations as $v) {
+                $prop = $v->getPropertyPath() ?: 'global';
+                $errs[$prop][] = $v->getMessage();
+            }
+            return $this->json(['errors' => $errs], 422);
+        }
+
+        // 6) Persist + gestion des doublons propres
+        try {
+            $em->persist($user);
+            $em->flush();
+        } catch (UniqueConstraintViolationException $e) {
+            // On devine le champ selon le message/contrainte — sinon message générique.
+            $msg = 'Email ou pseudo déjà utilisé.';
+            $txt = strtolower($e->getMessage());
+            if (str_contains($txt, 'email')) {
+                $msg = 'Cet email est déjà utilisé.';
+            } elseif (str_contains($txt, 'username')) {
+                $msg = 'Ce pseudo est déjà pris.';
+            }
+            return $this->json(['error' => $msg], 409);
+        } catch (\Throwable $e) {
+            // Loggue en prod; ici on reste concis côté client
+            return $this->json(['error' => 'Erreur serveur'], 500);
+        }
+
+        // 7) Réponse 201 (sans password)
+        return $this->json([
+            'id'          => $user->getId(),
+            'firstname'   => $user->getFirstname(),
+            'lastname'    => $user->getLastname(),
+            'email'       => $user->getEmail(),
+            'username'    => $user->getUsername(),
+            'avatar'      => $user->getAvatar(),
+            'phone_number'=> $user->getPhoneNumber(),
+            'age'         => $user->getAge(),
+            'roles'       => $user->getRoles(),
+            'is_active'   => $user->isActive(),
+            'created_at'  => $user->getCreatedAt()?->format(\DATE_ATOM),
+        ], 201);
+    }
+    /**
+     * @OA\Get(
+     *     path="/api/user/all",
+     *     summary="Liste de tous les utilisateurs",
+     *     security={{"bearerAuth": {}}},
+     *     @OA\Response(response=200, description="Liste retournée avec succès"),
+     *     @OA\Response(response=403, description="Accès interdit")
+     * )
+    */
     #[Route('/all', name: 'get_all_users', methods: ['GET'])]
     #[IsGranted('ROLE_ADMIN')]
     public function getAllUsers(EntityManagerInterface $entityManager): JsonResponse

@@ -27,6 +27,9 @@ import ProfileScreen from "../screens/profile/ProfileScreen";
 
 import NotificationsScreen from "../screens/notifications/NotificationsScreen";
 
+import ServicesAdminScreen from "../screens/admin/ServicesAdminScreen";
+import CategoriesAdminScreen from "../screens/admin/CategoriesAdminScreen";
+
 // Placeholders
 const makePlaceholder = (title) => () => (
   <View style={{ flex:1, backgroundColor:"#000", alignItems:"center", justifyContent:"center" }}>
@@ -84,7 +87,8 @@ export default function AppNavigator() {
           <Stack.Screen name="SpacesScreen" component={SpacesScreen} />
           <Stack.Screen name="AddSubscription" component={AddSubscriptionScreen} />
           <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: "Notifications" }} />
-
+          <Stack.Screen name="CategoriesAdmin" component={CategoriesAdminScreen} options={{ title: "Catégories (admin)" }} />
+          <Stack.Screen name="ServicesAdmin" component={ServicesAdminScreen} options={{ title: "Services (admin)" }} />
         </Stack.Navigator>
       ) : (
         <Stack.Navigator screenOptions={{ headerShown:false, animation:"fade" }}>

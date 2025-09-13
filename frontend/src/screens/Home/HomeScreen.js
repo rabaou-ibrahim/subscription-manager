@@ -59,10 +59,10 @@ export default function HomeScreen() {
   return (
     <Layout scroll header={<AppHeader />} footer={<AppFooter />} maxWidth={null}>
       {/* BG blobs plein écran (ne doivent pas intercepter les touches) */}
-+      <View pointerEvents="none" style={{ position:"absolute", inset:0, zIndex:0 }}>
-+        <View style={{ position:"absolute", top:-60, left:-40, width:320, height:320, borderRadius:160, opacity:0.12, backgroundColor: GREEN }} />
-+        <View style={{ position:"absolute", bottom:-80, right:-60, width:320, height:320, borderRadius:160, opacity:0.12, backgroundColor:"#7C3AED" }} />
-+      </View>
+       <View pointerEvents="none" style={{ position:"absolute", inset:0, zIndex:0 }}>
+        <View style={{ position:"absolute", top:-60, left:-40, width:320, height:320, borderRadius:160, opacity:0.12, backgroundColor: GREEN }} />
+        <View style={{ position:"absolute", bottom:-80, right:-60, width:320, height:320, borderRadius:160, opacity:0.12, backgroundColor:"#7C3AED" }} />
+      </View>
 
       {/* Contenu centré jusqu’à 1200px */}
       <View style={{ position:"relative", zIndex:1, width:"100%", maxWidth:1200, alignSelf:"center" }}>

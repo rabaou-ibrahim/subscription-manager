@@ -13,6 +13,8 @@ import useAuth from "../../hooks/useAuth";
 import { json } from "../../services/http";
 import styles from "../../styles/SpaceCreateStyles";
 
+import RoleGuard from "../../guards/RoleGuard";
+
 export default function SpaceCreateScreen() {
   const navigation = useNavigation();
   const { token } = useAuth();

@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   View, Text, TouchableOpacity, TextInput, SafeAreaView, Alert,
-  Switch, Platform, ScrollView, KeyboardAvoidingView, Image,
+  Switch, Platform, ScrollView, KeyboardAvoidingView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -11,21 +11,50 @@ import { useRoute, useNavigation } from "@react-navigation/native";
 import Layout from "../../ui/Layout";
 import AppHeader from "../../ui/AppHeader";
 import AppFooter from "../../ui/AppFooter";
-import ModalSelect from "../../ui/ModalSelect";
+import ServicePickerModal from "../../ui/ServicePickerModal";
 
 import useAuth from "../../hooks/useAuth";
 import { json } from "../../services/http";
 import styles from "../../styles/AddSubscriptionStyles";
-
 import RoleGuard from "../../guards/RoleGuard";
+import { getServiceIconUrl } from "../../util/serviceIcon";
 
-// si tu as un util pour l’icône des services, garde-le, sinon enlève l’import
-// import { getServiceIconUrl } from "../../utils/serviceIcon";
+// ==== options (valeur backend -> libellé FR) ====
+const CURRENCY_OPTIONS = [
+  { value: "EUR", label: "€ EUR" },
+  { value: "USD", label: "$ USD" },
+  { value: "GBP", label: "£ GBP" },
+  { value: "CAD", label: "$ CAD" },
+  { value: "AUD", label: "$ AUD" },
+];
 
-const CURRENCIES   = ["EUR", "USD", "GBP", "CAD", "AUD"];
-const FREQUENCIES  = ["monthly", "yearly", "weekly", "daily"];
-const BILLING_MODES = ["unknown", "credit_card", "sepa", "paypal", "cash", "other"];
-const STATUSES     = ["active", "inactive", "cancelled", "expired"];
+const FREQUENCY_OPTIONS = [
+  { value: "monthly", label: "Mensuel" },
+  { value: "yearly",  label: "Annuel" },
+  { value: "weekly",  label: "Hebdomadaire" },
+  { value: "daily",   label: "Quotidien" },
+];
+
+const BILLING_OPTIONS = [
+  { value: "unknown",     label: "Inconnu" },
+  { value: "credit_card", label: "Carte bancaire" },
+  { value: "sepa",        label: "Prélèvement SEPA" },
+  { value: "paypal",      label: "PayPal" },
+  { value: "cash",        label: "Espèces" },
+  { value: "other",       label: "Autre" },
+];
+
+const STATUS_OPTIONS = [
+  { value: "active",   label: "Actif" },
+  { value: "inactive", label: "Inactif" },
+  // { value: "cancelled",label: "Annulé" },
+  // { value: "expired",  label: "Expiré" },
+];
+
+const toLabel = (opts, v) => opts.find(o => o.value === v)?.label || v;
+const toOptions = (opts) => opts.map(o => o.label);
+const fromLabel = (opts, label) => (opts.find(o => o.label === label) || opts[0]).value;
+
 
 const twoDecimals = (v) => {
   const n = Number(String(v ?? "").replace(",", "."));
@@ -41,20 +70,32 @@ const parseYMD = (s) => {
 export default function AddSubscriptionScreen() {
   const route = useRoute();
   const navigation = useNavigation();
-  const { token, user } = useAuth(); // user pour fallback email/id
+  const { token, user } = useAuth();
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
-  // params facultatifs
+  // facultatif
   const initialMemberId = route.params?.memberId ?? null;
   const initialSpaceId  = route.params?.spaceId ?? null;
 
-  // target (espace/membre)
+  // cible (espace/membre)
   const [memberId, setMemberId] = useState(initialMemberId);
   const [spaceId,  setSpaceId]  = useState(initialSpaceId);
   const [resolving, setResolving] = useState(false);
 
-  // form
+  // services
   const [services, setServices] = useState([]);
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await json("/api/service/all", { headers: { ...authHeaders } });
+        setServices(Array.isArray(data) ? data : (data?.items ?? []));
+      } catch (e) {
+        console.warn("load services:", e?.message || e);
+      }
+    })();
+  }, [token]);
+
+  // formulaire
   const [serviceId, setServiceId] = useState(null);
   const [showService, setShowService] = useState(false);
 
@@ -77,41 +118,23 @@ export default function AddSubscriptionScreen() {
   const [showBilling, setShowBilling]         = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
 
-  // titre / header natif (si tu l’affiches ailleurs, ignore setOptions)
   useEffect(() => {
     navigation.setOptions?.({ title: "Nouvel abonnement" });
   }, [navigation]);
 
-  // charge la liste des services
-  useEffect(() => {
-    (async () => {
-      try {
-        const data = await json("/api/service/all", { headers: { ...authHeaders } });
-        const list = Array.isArray(data) ? data : (data?.items ?? []);
-        setServices(list);
-        if (!serviceId && list.length) setServiceId(list[0].id);
-      } catch (e) {
-        console.warn("Services load:", e?.message || e);
-      }
-    })();
-  }, [token]); // recharge si token change
-
-  // résout automatiquement memberId si absent
+  // résolution auto du memberId s’il n’est pas fourni
   useEffect(() => {
     if (memberId || !token) return;
     setResolving(true);
     (async () => {
       try {
-        // 1) Tous mes espaces
         const data = await json("/api/space/all", { headers: { ...authHeaders } });
         const spaces = Array.isArray(data) ? data : (data?.items ?? []);
         const ordered = initialSpaceId
           ? [{ id: initialSpaceId }, ...spaces.filter(s => s.id !== initialSpaceId)]
           : spaces;
 
-        // 2) essaie de trouver mon member dans chaque espace
         for (const sp of ordered) {
-          // inline hints ?
           const inline =
             sp.my_member_id ||
             sp.meMemberId ||
@@ -121,13 +144,10 @@ export default function AddSubscriptionScreen() {
 
           if (inline) { setMemberId(inline); setSpaceId(prev => prev ?? sp.id); return; }
 
-          // Fallback sans /api/member/space/{id}
           try {
-            // On récupère tout puis on filtre
             const allMembers = await json("/api/member/all", { headers: { ...authHeaders } });
             const arr = Array.isArray(allMembers) ? allMembers : (allMembers?.items ?? []);
 
-            // Essaie de détecter le membre qui correspond à l'espace courant
             const me =
               arr.find(m => m?.is_me && (m?.space?.id === sp.id || m?.space_id === sp.id)) ||
               arr.find(m => (m?.user?.id === user?.id) && (m?.space?.id === sp.id || m?.space_id === sp.id)) ||
@@ -144,11 +164,12 @@ export default function AddSubscriptionScreen() {
     })();
   }, [memberId, token, user, initialSpaceId]);
 
+  // items du picker service (avec icône)
   const serviceItems = useMemo(() => {
     return services.map(s => ({
       label: s.name ?? s.title ?? s.id,
       value: s.id,
-      // icon: getServiceIconUrl ? getServiceIconUrl(s) : undefined,
+      icon: getServiceIconUrl(s) || undefined, // favicon / logo si dispo
     }));
   }, [services]);
   const selectedService = serviceItems.find(x => x.value === serviceId);
@@ -157,10 +178,10 @@ export default function AddSubscriptionScreen() {
     if (!serviceId) return "Choisis un service.";
     if (!name || name.trim().length < 2) return "Le nom est requis (≥ 2 caractères).";
     if (!startDate || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return "La date de début doit être YYYY-MM-DD.";
-    if (!FREQUENCIES.includes(cycle)) return "Fréquence invalide.";
-    if (!CURRENCIES.includes(currency)) return "Devise invalide.";
-    if (!STATUSES.includes(status)) return "Statut invalide.";
-    if (!BILLING_MODES.includes(billingMode)) return "Mode de facturation invalide.";
+    if (!FREQUENCY_OPTIONS.some(o => o.value === cycle)) return "Fréquence invalide.";
+    if (!CURRENCY_OPTIONS.some(o => o.value === currency)) return "Devise invalide.";
+    if (!STATUS_OPTIONS.some(o => o.value === status)) return "Statut invalide.";
+    if (!BILLING_OPTIONS.some(o => o.value === billingMode)) return "Mode de facturation invalide.";
     return null;
   };
 
@@ -199,8 +220,7 @@ export default function AddSubscriptionScreen() {
         navigation.goBack();
       }
     } catch (e) {
-      const msg = e?.message || "Inscription de l’abonnement impossible";
-      Alert.alert("Erreur", msg);
+      Alert.alert("Erreur", e?.message || "Création impossible");
     }
   };
 
@@ -208,266 +228,224 @@ export default function AddSubscriptionScreen() {
   const placeholderCol = "#8e8e8e";
 
   return (
-    <RoleGuard anyOf={["ROLE_USER","ROLE_ADMIN"]}>
-    <Layout
-      scroll={false}
-      header={<AppHeader />}
-      footer={<AppFooter />}
-      style={{ backgroundColor: "#000" }}
-    >
-      <SafeAreaView style={[styles.container, { backgroundColor: "#0a0a0a" }]}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
-          <ScrollView contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
-            <View style={styles.formContainer}>
-              {resolving ? (
-                <Text style={{ color: "#9cdcfe", marginBottom: 8 }}>Préparation…</Text>
-              ) : null}
+    <RoleGuard roles={["ROLE_USER","ROLE_ADMIN"]}>
+      <Layout header={<AppHeader />} footer={<AppFooter />} style={{ backgroundColor: "#000" }} scroll={false}>
+        <SafeAreaView style={[styles.container, { backgroundColor: "#0a0a0a" }]}>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+            <ScrollView contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+              <View style={styles.formContainer}>
+                {resolving ? (<Text style={{ color: "#9cdcfe", marginBottom: 8 }}>Préparation…</Text>) : null}
 
-              {services.length === 0 && (
-                <View style={{ backgroundColor:"#0f0f0f", borderWidth:1, borderColor:"#1f1f1f",
-                              borderRadius:12, padding:12, marginBottom:12 }}>
-                  <Text style={{ color:"#9aa0a6", marginBottom:8 }}>
-                    Aucun service en base. Tu peux importer une liste depuis Internet.
-                  </Text>
+                {/* Service */}
+                <Text style={[styles.label, textWhite]}>Service</Text>
+                <TouchableOpacity
+                  style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
+                  onPress={() => setShowService(true)}
+                >
+                  <Text style={{ color: "#eee" }}>{selectedService?.label || "Sélectionner"}</Text>
+                  <Ionicons name="chevron-down" size={20} color="#72CE1D" />
+                </TouchableOpacity>
+
+                {/* Nom */}
+                <Text style={[styles.label, textWhite]}>Nom</Text>
+                <TextInput
+                  style={[styles.input, textWhite]}
+                  placeholder="Nom de l’abonnement"
+                  placeholderTextColor={placeholderCol}
+                  value={name}
+                  onChangeText={setName}
+                />
+
+                {/* Notes */}
+                <Text style={[styles.label, textWhite]}>Notes</Text>
+                <TextInput
+                  style={[styles.input, { height: 90, textAlignVertical: "top", color: "#eee" }]}
+                  placeholder="Notes (optionnel)"
+                  placeholderTextColor={placeholderCol}
+                  value={notes}
+                  onChangeText={setNotes}
+                  multiline
+                />
+
+                {/* Montant */}
+                <Text style={[styles.label, textWhite]}>Montant</Text>
+                <TextInput
+                  style={[styles.input, textWhite]}
+                  placeholder="0.00"
+                  placeholderTextColor={placeholderCol}
+                  keyboardType="decimal-pad"
+                  value={amount}
+                  onChangeText={setAmount}
+                />
+
+                {/* Devise */}
+                <Text style={[styles.label, textWhite]}>Devise</Text>
+                <TouchableOpacity
+                  style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
+                  onPress={() => setShowCurrency(true)}
+                >
+                  <Text style={{ color: "#eee" }}>{toLabel(CURRENCY_OPTIONS, currency)}</Text>
+                  <Ionicons name="chevron-down" size={20} color="#72CE1D" />
+                </TouchableOpacity>
+
+                {/* Cycle */}
+                <Text style={[styles.label, textWhite]}>Cycle</Text>
+                <TouchableOpacity
+                  style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
+                  onPress={() => setShowCycle(true)}
+                >
+                  <Text style={{ color: "#eee" }}>{toLabel(FREQUENCY_OPTIONS, cycle)}</Text>
+                  <Ionicons name="chevron-down" size={20} color="#72CE1D" />
+                </TouchableOpacity>
+
+                {/* Début */}
+                <Text style={[styles.label, textWhite]}>Début</Text>
+                {Platform.OS === "web" ? (
+                  <TextInput
+                    style={[styles.input, textWhite]}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor={placeholderCol}
+                    value={startDate}
+                    onChangeText={setStartDate}
+                  />
+                ) : (
                   <TouchableOpacity
-                    onPress={async () => {
-                      try {
-                        const { created, failed, skipped } = await importServicesFromEnv(authHeaders);
-                        const data = await json("/api/service/all", { headers: { ...authHeaders } });
-                        setServices(Array.isArray(data) ? data : (data?.items ?? []));
-                        Alert.alert("Import terminé",
-                          `Créés: ${created}\nÉchecs: ${failed}\nIgnorés (déjà présents): ${skipped}`);
-                      } catch (e) {
-                        Alert.alert("Erreur", e?.message || "Import impossible");
-                      }
-                    }}
-                    style={{ backgroundColor:"#B7FF27", borderRadius:10, paddingVertical:12, alignItems:"center" }}
+                    style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
+                    onPress={() => setShowStartPicker(true)}
                   >
-                    <Text style={{ fontWeight:"800" }}>Importer depuis Internet</Text>
+                    <Text style={{ color: "#eee" }}>{startDate || "YYYY-MM-DD"}</Text>
+                    <Ionicons name="calendar" size={20} color="#72CE1D" />
                   </TouchableOpacity>
+                )}
+
+                {/* Fin */}
+                <Text style={[styles.label, textWhite]}>Fin (optionnel)</Text>
+                {Platform.OS === "web" ? (
+                  <TextInput
+                    style={[styles.input, textWhite]}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor={placeholderCol}
+                    value={endDate}
+                    onChangeText={setEndDate}
+                  />
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
+                    onPress={() => setShowEndPicker(true)}
+                  >
+                    <Text style={{ color: "#eee" }}>{endDate || "—"}</Text>
+                    <Ionicons name="calendar" size={20} color="#72CE1D" />
+                  </TouchableOpacity>
+                )}
+
+                {/* Mode de facturation */}
+                <Text style={[styles.label, textWhite]}>Mode de facturation</Text>
+                <TouchableOpacity
+                  style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
+                  onPress={() => setShowBilling(true)}
+                >
+                  <Text style={{ color: "#eee" }}>{toLabel(BILLING_OPTIONS, billingMode)}</Text>
+                  <Ionicons name="chevron-down" size={20} color="#72CE1D" />
+                </TouchableOpacity>
+
+                {/* Renouvellement auto */}
+                <View style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}>
+                  <Text style={[styles.label, textWhite, { marginBottom: 0 }]}>Renouvellement auto</Text>
+                  <Switch value={autoRenewal} onValueChange={setAutoRenewal} />
                 </View>
-              )}
 
-              {/* Service */}
-              <Text style={[styles.label, textWhite]}>Service</Text>
-              <TouchableOpacity
-                style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
-                onPress={() => setShowService(true)}
-              >
-                <Text style={[{ color: "#eee" }]}>
-                  {selectedService?.label || "Sélectionner"}
-                </Text>
-                <Ionicons name="chevron-down" size={20} color="#72CE1D" />
-              </TouchableOpacity>
-
-              {/* Nom */}
-              <Text style={[styles.label, textWhite]}>Nom</Text>
-              <TextInput
-                style={[styles.input, textWhite]}
-                placeholder="Nom de l’abonnement"
-                placeholderTextColor={placeholderCol}
-                value={name}
-                onChangeText={setName}
-              />
-
-              {/* Notes */}
-              <Text style={[styles.label, textWhite]}>Notes</Text>
-              <TextInput
-                style={[styles.input, { height: 90, textAlignVertical: "top", color: "#eee" }]}
-                placeholder="Notes (optionnel)"
-                placeholderTextColor={placeholderCol}
-                value={notes}
-                onChangeText={setNotes}
-                multiline
-              />
-
-              {/* Montant */}
-              <Text style={[styles.label, textWhite]}>Montant</Text>
-              <TextInput
-                style={[styles.input, textWhite]}
-                placeholder="0.00"
-                placeholderTextColor={placeholderCol}
-                keyboardType="decimal-pad"
-                value={amount}
-                onChangeText={setAmount}
-              />
-
-              {/* Devise */}
-              <Text style={[styles.label, textWhite]}>Devise</Text>
-              <TouchableOpacity
-                style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
-                onPress={() => setShowCurrency(true)}
-              >
-                <Text style={{ color: "#eee" }}>{currency}</Text>
-                <Ionicons name="chevron-down" size={20} color="#72CE1D" />
-              </TouchableOpacity>
-
-              {/* Cycle */}
-              <Text style={[styles.label, textWhite]}>Cycle</Text>
-              <TouchableOpacity
-                style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
-                onPress={() => setShowCycle(true)}
-              >
-                <Text style={{ color: "#eee" }}>{cycle}</Text>
-                <Ionicons name="chevron-down" size={20} color="#72CE1D" />
-              </TouchableOpacity>
-
-              {/* Début */}
-              <Text style={[styles.label, textWhite]}>Début</Text>
-              {Platform.OS === "web" ? (
-                <TextInput
-                  style={[styles.input, textWhite]}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor={placeholderCol}
-                  value={startDate}
-                  onChangeText={setStartDate}
-                />
-              ) : (
+                {/* Statut */}
+                <Text style={[styles.label, textWhite]}>Statut</Text>
                 <TouchableOpacity
                   style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
-                  onPress={() => setShowStartPicker(true)}
+                  onPress={() => setShowStatusModal(true)}
                 >
-                  <Text style={{ color: "#eee" }}>{startDate || "YYYY-MM-DD"}</Text>
-                  <Ionicons name="calendar" size={20} color="#72CE1D" />
+                  <Text style={{ color: "#eee" }}>{toLabel(STATUS_OPTIONS, status)}</Text>
+                  <Ionicons name="chevron-down" size={20} color="#72CE1D" />
                 </TouchableOpacity>
-              )}
-
-              {/* Fin */}
-              <Text style={[styles.label, textWhite]}>Fin (optionnel)</Text>
-              {Platform.OS === "web" ? (
-                <TextInput
-                  style={[styles.input, textWhite]}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor={placeholderCol}
-                  value={endDate}
-                  onChangeText={setEndDate}
-                />
-              ) : (
-                <TouchableOpacity
-                  style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
-                  onPress={() => setShowEndPicker(true)}
-                >
-                  <Text style={{ color: "#eee" }}>{endDate || "—"}</Text>
-                  <Ionicons name="calendar" size={20} color="#72CE1D" />
-                </TouchableOpacity>
-              )}
-
-              {/* Mode de facturation */}
-              <Text style={[styles.label, textWhite]}>Mode de facturation</Text>
-              <TouchableOpacity
-                style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
-                onPress={() => setShowBilling(true)}
-              >
-                <Text style={{ color: "#eee" }}>{billingMode}</Text>
-                <Ionicons name="chevron-down" size={20} color="#72CE1D" />
-              </TouchableOpacity>
-
-              {/* Renouvellement auto */}
-              <View style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}>
-                <Text style={[styles.label, textWhite, { marginBottom: 0 }]}>Renouvellement auto</Text>
-                <Switch value={autoRenewal} onValueChange={setAutoRenewal} />
               </View>
+            </ScrollView>
 
-              {/* Statut */}
-              <Text style={[styles.label, textWhite]}>Statut</Text>
-              <TouchableOpacity
-                style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
-                onPress={() => setShowStatusModal(true)}
-              >
-                <Text style={{ color: "#eee" }}>{status}</Text>
-                <Ionicons name="chevron-down" size={20} color="#72CE1D" />
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
+            <TouchableOpacity style={styles.button} onPress={handleCreate}>
+              <Text style={styles.buttonText}>Créer</Text>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
 
-          <TouchableOpacity style={styles.button} onPress={handleCreate}>
-            <Text style={styles.buttonText}>Créer</Text>
-          </TouchableOpacity>
-        </KeyboardAvoidingView>
-
-        {/* Modals */}
-        <ModalSelect
-          visible={showService}
-          title="Service"
-          items={serviceItems}
-          value={selectedService?.label}
-          onChangeItem={(item) => setServiceId(item.value)}
-          onClose={() => setShowService(false)}
-          maxHeight={360}
-          compact
-          columns={2}
-          searchable
-        />
-
-        <ModalSelect
-          visible={showCurrency}
-          title="Devise"
-          options={CURRENCIES}
-          value={currency}
-          onChange={(v) => { setCurrency(v); setShowCurrency(false); }}
-          onClose={() => setShowCurrency(false)}
-          compact
-          columns={3}
-        />
-
-        <ModalSelect
-          visible={showCycle}
-          title="Cycle"
-          options={FREQUENCIES}
-          value={cycle}
-          onChange={(v) => { setCycle(v); setShowCycle(false); }}
-          onClose={() => setShowCycle(false)}
-          compact
-          columns={2}
-        />
-
-        <ModalSelect
-          visible={showBilling}
-          title="Mode de facturation"
-          options={BILLING_MODES}
-          value={billingMode}
-          onChange={(v) => { setBillingMode(v); setShowBilling(false); }}
-          onClose={() => setShowBilling(false)}
-          compact
-          columns={2}
-        />
-
-        <ModalSelect
-          visible={showStatusModal}
-          title="Statut"
-          options={STATUSES}
-          value={status}
-          onChange={(v) => { setStatus(v); setShowStatusModal(false); }}
-          onClose={() => setShowStatusModal(false)}
-          compact
-          columns={2}
-        />
-
-        {/* Pickers natifs */}
-        {showStartPicker && (
-          <DateTimePicker
-            value={parseYMD(startDate || fmtDate(new Date()))}
-            mode="date"
-            display={Platform.OS === "ios" ? "spinner" : "calendar"}
-            onChange={(_, d) => {
-              setShowStartPicker(Platform.OS === "ios");
-              if (d) setStartDate(fmtDate(d));
-            }}
+          {/* === Modals === */}
+          <ServicePickerModal
+            visible={showService}
+            title="Choisir un service"
+            items={serviceItems}                
+            selectedValue={serviceId}
+            onPick={(item) => { setServiceId(item.value); setShowService(false); }}
+            onClose={() => setShowService(false)}
           />
-        )}
-        {showEndPicker && (
-          <DateTimePicker
-            value={parseYMD(endDate || fmtDate(new Date()))}
-            mode="date"
-            display={Platform.OS === "ios" ? "spinner" : "calendar"}
-            onChange={(_, d) => {
-              setShowEndPicker(Platform.OS === "ios");
-              if (d) setEndDate(fmtDate(d));
-            }}
+
+          <ServicePickerModal
+            visible={showCurrency}
+            title="Devise"
+            options={toOptions(CURRENCY_OPTIONS)}
+            value={toLabel(CURRENCY_OPTIONS, currency)}
+            onChange={(label) => { setCurrency(fromLabel(CURRENCY_OPTIONS, label)); setShowCurrency(false); }}
+            onClose={() => setShowCurrency(false)}
+            compact columns={3}
           />
-        )}
-      </SafeAreaView>
-    </Layout>
-    </RoleGuard>  
+
+          <ServicePickerModal
+            visible={showCycle}
+            title="Cycle"
+            options={toOptions(FREQUENCY_OPTIONS)}
+            value={toLabel(FREQUENCY_OPTIONS, cycle)}
+            onChange={(label) => { setCycle(fromLabel(FREQUENCY_OPTIONS, label)); setShowCycle(false); }}
+            onClose={() => setShowCycle(false)}
+            compact columns={2}
+          />
+
+          <ServicePickerModal
+            visible={showBilling}
+            title="Mode de facturation"
+            options={toOptions(BILLING_OPTIONS)}
+            value={toLabel(BILLING_OPTIONS, billingMode)}
+            onChange={(label) => { setBillingMode(fromLabel(BILLING_OPTIONS, label)); setShowBilling(false); }}
+            onClose={() => setShowBilling(false)}
+            compact columns={2}
+          />
+
+          <ServicePickerModal
+            visible={showStatusModal}
+            title="Statut"
+            options={toOptions(STATUS_OPTIONS)}
+            value={toLabel(STATUS_OPTIONS, status)}
+            onChange={(label) => { setStatus(fromLabel(STATUS_OPTIONS, label)); setShowStatusModal(false); }}
+            onClose={() => setShowStatusModal(false)}
+            compact columns={2}
+          />
+
+          {/* Pickers natifs */}
+          {showStartPicker && (
+            <DateTimePicker
+              value={parseYMD(startDate || fmtDate(new Date()))}
+              mode="date"
+              display={Platform.OS === "ios" ? "spinner" : "calendar"}
+              onChange={(_, d) => {
+                setShowStartPicker(Platform.OS === "ios");
+                if (d) setStartDate(fmtDate(d));
+              }}
+            />
+          )}
+          {showEndPicker && (
+            <DateTimePicker
+              value={parseYMD(endDate || fmtDate(new Date()))}
+              mode="date"
+              display={Platform.OS === "ios" ? "spinner" : "calendar"}
+              onChange={(_, d) => {
+                setShowEndPicker(Platform.OS === "ios");
+                if (d) setEndDate(fmtDate(d));
+              }}
+            />
+          )}
+        </SafeAreaView>
+      </Layout>
+    </RoleGuard>
   );
 }

@@ -1,10 +1,20 @@
 import { StyleSheet } from "react-native";
 
 const SubscriptionListStyles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#000",
-    paddingHorizontal: 15,
+    container: { flex: 1, backgroundColor: "#000" },
+
+  // centre le contenu à l'intérieur du ScrollView/Zone
+  contentContainer: {
+    alignItems: "center",
+    paddingBottom: 16,
+  },
+
+  // wrapper centré avec largeur max
+  content: {
+    width: "100%",
+    maxWidth: 960,
+    alignSelf: "center",
+    paddingHorizontal: 16,
     paddingTop: 10,
   },
 

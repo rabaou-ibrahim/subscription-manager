@@ -20,7 +20,7 @@ const money = (amount, currency = "EUR") =>
     ? "—"
     : new Intl.NumberFormat("fr-FR", { style: "currency", currency }).format(Number(amount));
 
-/** calcule prochaine échéance à partir de start/end + fréquence */
+/** calcule prochaine échéance à partir de start/end et fréquence */
 function computeNextDue(sub) {
   if (!sub?.start_date) return null;
   const end = sub?.end_date ? new Date(sub.end_date) : null;
@@ -65,7 +65,7 @@ export default function ActiveSubscriptionScreen() {
   const [subs, setSubs] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // charge services + abonnements
+  // charge services et abonnements
   const load = useCallback(async () => {
     if (!token) return;
     setLoading(true);
