@@ -1,21 +1,56 @@
-const API = "http://127.0.0.1:8000"; // adapte si besoin (10.0.2.2 sur Android émulateur)
+// src/services/http.js
+const BASE = (process.env.EXPO_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
 
-export async function json(path, options = {}) {
-  const url = path.startsWith("http") ? path : `${API}${path}`;
-  const res = await fetch(url, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
-    ...options,
-  });
+function extractMessage(status, data) {
+  // 1) Réponses Validator: { violations: [{propertyPath, message}, ...] }
+  if (data && Array.isArray(data.violations) && data.violations.length) {
+    return data.violations
+      .map(v => v.message || (v.propertyPath ? `${v.propertyPath}: ${v.message}` : ""))
+      .filter(Boolean)
+      .join("\n");
+  }
+  // 2) Champs courants
+  if (data && typeof data === "object") {
+    if (data.message) return data.message;
+    if (data.error)   return data.error;
+    if (data.detail)  return data.detail;
+    if (Array.isArray(data.errors)) return data.errors.join("\n");
+    if (data.title && data.status) return `${data.title} (HTTP ${data.status})`;
+  }
+  if (typeof data === "string" && data.trim()) return data.trim();
+  return `HTTP ${status}`;
+}
 
-  const isJson = res.headers.get("content-type")?.includes("application/json");
+export async function json(path, opts = {}) {
+  const url = path.startsWith("http") ? path : `${BASE}${path}`;
+
+  // ✅ on empêche opts.headers d’écraser nos headers par défaut
+  const { headers: extraHeaders = {}, body, ...rest } = opts;
+  const method = (rest.method || "GET").toUpperCase();
+
+  const init = {
+    method,
+    // Ajoute Content-Type seulement quand pertinent
+    headers: {
+      Accept: "application/json",
+      ...((method !== "GET" && method !== "HEAD") ? { "Content-Type": "application/json" } : {}),
+      ...extraHeaders,
+    },
+    // N’envoie pas de body sur GET/HEAD
+    ...((method !== "GET" && method !== "HEAD" && body != null)
+      ? { body: typeof body === "string" ? body : JSON.stringify(body) }
+      : {}),
+    ...rest,
+  };
+
+  const res = await fetch(url, init);
+  const ct = res.headers.get("content-type") || "";
+  const isJson = ct.includes("application/json");
   let data = null;
   try { data = isJson ? await res.json() : await res.text(); } catch {}
 
   if (!res.ok) {
-    const msg =
-      (typeof data === "object" && (data?.message || data?.error)) ||
-      (typeof data === "string" ? data : null) ||
-      `HTTP ${res.status}`;
+    const msg = extractMessage(res.status, data) || `${method} ${url} → ${res.status}`;
     const err = new Error(msg);
     err.status = res.status;
     err.data = data;

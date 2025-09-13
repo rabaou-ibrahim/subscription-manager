@@ -223,7 +223,7 @@ export default function DashboardScreen() {
           <TouchableOpacity onPress={goVoirPlusCalendar}><Text style={styles.seeMore}>Voir plus</Text></TouchableOpacity>
         </View>
 
-        {/* Filtres semaine/mois + nav */}
+        {/* Filtres semaine/mois */}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 }}>
           <TouchableOpacity
             style={mode === "week" ? styles.activeFilter : styles.inactiveFilter}

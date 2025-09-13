@@ -13,8 +13,16 @@ export function AuthProvider({ children }) {
   const [user,  setUser]    = useState(null);
 
   const isLogged = !!token;
-  const roles = user?.roles || user?.role || [];
-  const isAdmin = useMemo(() => Array.isArray(roles) && roles.includes("ROLE_ADMIN"), [roles]);
+
+  // roles peut être un array (recommandé) ou une string côté backend
+  const rawRoles = user?.roles ?? user?.role ?? [];
+  const rolesArr = Array.isArray(rawRoles) ? rawRoles : [rawRoles].filter(Boolean);
+
+  const isAdmin = useMemo(() => rolesArr.includes("ROLE_ADMIN"), [rolesArr]);
+  const hasAnyRole = useCallback(
+    (required = []) => !required?.length || required.some(r => rolesArr.includes(r)),
+    [rolesArr]
+  );
 
   useEffect(() => {
     (async () => {
@@ -33,7 +41,7 @@ export function AuthProvider({ children }) {
     })();
   }, []);
 
-    const login = useCallback(async (email, password) => {
+  const login = useCallback(async (email, password) => {
     try {
       const data = await json("/api/auth/login", {
         method: "POST",
@@ -71,6 +79,7 @@ export function AuthProvider({ children }) {
       phone_number: payload.phone_number ?? null,
       age: (payload.age ?? "") === "" ? null : Number(payload.age),
       avatar: payload.avatar ?? null,
+      // ces champs peuvent être ignorés par le backend si non autorisés
       roles: ["ROLE_USER"],
       is_active: true,
     };
@@ -87,11 +96,23 @@ export function AuthProvider({ children }) {
     await storage.del("token");
   }, []);
 
-  const value = { ready, isLogged, token, user, roles, isAdmin, login, logout, setUser, register };
+  const value = {
+    ready,
+    isLogged,
+    isAuthenticated: isLogged, // alias pour compat
+    token,
+    user,
+    roles: rolesArr,
+    isAdmin,
+    hasAnyRole,                // 👈 exposé pour RoleGuard
+    login,
+    logout,
+    setUser,
+    register,
+  };
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
 }
 
-// 👇 ton hook reste dispo, mais maintenant il lit le contexte partagé
 export default function useAuth() {
   return useContext(AuthCtx);
 }

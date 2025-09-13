@@ -4,12 +4,13 @@ import { View, Text, TouchableOpacity, useWindowDimensions, ScrollView } from "r
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native"; // 👈
 import useAuth from "../hooks/useAuth";
+import RoleBadge from "./RoleBadge";
 
 const GREEN = "#B7FF27";
 const BORDER = "#242424";
 
 export default function AppHeader() {
-  const { isLogged } = useAuth();
+  const { isLogged, logout } = useAuth();
   const navigation = useNavigation();               // 👈 on récupère la nav ici
   const { width } = useWindowDimensions();
   const isSmall = width < 480;
@@ -55,9 +56,14 @@ export default function AppHeader() {
             </>
           ) : (
             <>
+              <RoleBadge style={{ marginLeft: 4 }} />
               <HeaderBtn label="Dashboard" icon="speedometer-outline" onPress={() => navigation.navigate("Dashboard")} compact={isSmall} />
               <HeaderBtn label="Abonnements" icon="albums-outline" onPress={() => navigation.navigate("SubscriptionList")} compact={isSmall} />
               <HeaderBtn label="Profil" icon="person-outline" onPress={() => navigation.navigate("Profile")} compact={isSmall} />
+              <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 16, borderWidth: 1, borderColor: BORDER, minWidth: 160, justifyContent: "center", backgroundColor: GREEN }} onPress={logout}>
+                <Ionicons name="log-out-outline" size={18} color="#000" />
+                <Text style={{ color: "#000", fontWeight: "800" }}>Se déconnecter</Text>
+              </TouchableOpacity>
             </>
           )}
         </ScrollView>

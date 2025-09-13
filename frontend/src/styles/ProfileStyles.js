@@ -3,7 +3,22 @@ import { StyleSheet } from "react-native";
 const GREEN = "#B7FF27";
 
 export default StyleSheet.create({
-  container: { flex: 1, padding: 16 },
+  container: { flex: 1, backgroundColor: "#000" },
+
+  // centre le contenu à l'intérieur du ScrollView (web)
+  pageContainer: {
+    alignItems: "center",
+    paddingBottom: 24,
+  },
+
+  // wrapper centré avec largeur max
+  page: {
+    width: "100%",
+    maxWidth: 960,
+    alignSelf: "center",
+    paddingHorizontal: 16,
+    paddingTop: 14,
+  },
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#000" },
   title: { color: "#fff", fontSize: 22, fontWeight: "800", marginBottom: 12 },
   card: {

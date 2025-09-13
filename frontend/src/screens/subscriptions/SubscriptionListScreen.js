@@ -1,4 +1,3 @@
-// src/screens/subscriptions/SubscriptionListScreen.js
 import React, { useState, useCallback, useMemo } from "react";
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
@@ -14,7 +13,6 @@ import AppFooter from "../../ui/AppFooter";
 import useAuth from "../../hooks/useAuth";
 import { json } from "../../services/http";
 import styles from "../../styles/SubscriptionListStyles";
-
 import RoleGuard from "../../guards/RoleGuard";
 
 export default function SubscriptionListScreen() {
@@ -23,7 +21,6 @@ export default function SubscriptionListScreen() {
   const { token, isLogged, roles } = useAuth();
   const isAdmin = Array.isArray(roles) && roles.includes("ROLE_ADMIN");
 
-  // ✅ headers mémoïsés (référence stable tant que token ne change pas)
   const authHeaders = useMemo(
     () => (token ? { Authorization: `Bearer ${token}` } : {}),
     [token]
@@ -31,10 +28,10 @@ export default function SubscriptionListScreen() {
 
   const spaceId = route.params?.spaceId ?? null;
 
-  const [searchText, setSearchText] = useState("");
+  const [searchText, setSearchText]       = useState("");
   const [subscriptions, setSubscriptions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [loading, setLoading]             = useState(true);
+  const [error, setError]                 = useState(null);
 
   const money = (amount, currency = "EUR") =>
     amount == null
@@ -45,17 +42,16 @@ export default function SubscriptionListScreen() {
     if (Platform.OS === "web") return window.confirm(`${title}\n\n${message}`);
     return new Promise((resolve) => {
       Alert.alert(title, message, [
-        { text: "Annuler", style: "cancel", onPress: () => resolve(false) },
-        { text: "Supprimer", style: "destructive", onPress: () => resolve(true) },
+        { text: "Annuler",   style: "cancel",     onPress: () => resolve(false) },
+        { text: "Supprimer", style: "destructive",onPress: () => resolve(true)  },
       ]);
     });
   };
 
-  // ⚠️ ne dépend que de token/spaceId/isAdmin (via headers mémoïsé)
   const fetchMembersForSpace = useCallback(
     async (sid) => {
       const data = await json("/api/member/all", { headers: authHeaders });
-      const arr = Array.isArray(data) ? data : (data?.items ?? []);
+      const arr  = Array.isArray(data) ? data : (data?.items ?? []);
       return arr.filter(m => String(m?.space?.id ?? m?.space_id) === String(sid));
     },
     [authHeaders]
@@ -65,22 +61,15 @@ export default function SubscriptionListScreen() {
     setLoading(true);
     setError(null);
     try {
-      const endpoint = spaceId
-        ? "/api/subscription/all"
-        : (isAdmin ? "/api/subscription/all" : "/api/subscription/mine");
-
-      // (debug utile) — tu peux retirer après
-      // console.debug("[subs] GET", endpoint);
-
+      const endpoint = spaceId ? "/api/subscription/all" : (isAdmin ? "/api/subscription/all" : "/api/subscription/mine");
       let subsRaw = await json(endpoint, { headers: authHeaders });
-      let subs = Array.isArray(subsRaw) ? subsRaw : (subsRaw?.items ?? []);
+      let subs    = Array.isArray(subsRaw) ? subsRaw : (subsRaw?.items ?? []);
 
       if (spaceId) {
         const membersInSpace = await fetchMembersForSpace(spaceId);
         const ids = new Set(membersInSpace.map(m => String(m.id)));
         subs = subs.filter(s => ids.has(String(s.member_id)));
       }
-
       setSubscriptions(subs);
     } catch (e) {
       setError("Impossible de charger les abonnements");
@@ -89,7 +78,6 @@ export default function SubscriptionListScreen() {
     }
   }, [authHeaders, spaceId, isAdmin, fetchMembersForSpace]);
 
-  // ✅ Un seul hook qui charge: au focus (y compris le premier mount)
   useFocusEffect(
     useCallback(() => {
       if (!isLogged) {
@@ -120,7 +108,7 @@ export default function SubscriptionListScreen() {
   }, [subscriptions, searchText]);
 
   const renderItem = ({ item }) => (
-    <View style={[styles.row, { flexDirection: "row", alignItems: "center" }]}>
+    <View style={[styles.row, { flexDirection: "row", alignItems: "center", width: "100%" }]}>
       <TouchableOpacity
         onPress={() => navigation.navigate("SubscriptionDetails", { id: item.id, subscription: item })}
         style={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, flexDirection: "row", alignItems: "center" }}
@@ -150,7 +138,6 @@ export default function SubscriptionListScreen() {
     </View>
   );
 
-  // Renders
   if (loading) {
     return (
       <Layout header={<AppHeader />} footer={<AppFooter />} style={{ backgroundColor: "#000" }}>
@@ -174,39 +161,45 @@ export default function SubscriptionListScreen() {
 
   return (
     <RoleGuard anyOf={["ROLE_USER","ROLE_ADMIN"]}>
-    <Layout header={<AppHeader />} footer={<AppFooter />} style={{ backgroundColor: "#000" }}>
-      <SafeAreaView style={styles.container}>
-        <View style={styles.searchContainer}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Rechercher..."
-            placeholderTextColor="#72CE1D"
-            value={searchText}
-            onChangeText={setSearchText}
-          />
-          <TouchableOpacity style={styles.searchButton}>
-            <Ionicons name="search" size={24} color="#72CE1D" />
-          </TouchableOpacity>
-        </View>
+      <Layout header={<AppHeader />} footer={<AppFooter />} style={{ backgroundColor: "#000" }}>
+        <SafeAreaView style={styles.container}>
+          <View style={styles.content}>
+            {/* Recherche */}
+            <View style={styles.searchContainer}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Rechercher..."
+                placeholderTextColor="#72CE1D"
+                value={searchText}
+                onChangeText={setSearchText}
+              />
+              <TouchableOpacity style={styles.searchButton}>
+                <Ionicons name="search" size={24} color="#72CE1D" />
+              </TouchableOpacity>
+            </View>
 
-        <View style={{ marginBottom: 10 }}>
-          <TouchableOpacity
-            onPress={() => navigation.navigate("AddSubscription", spaceId ? { spaceId } : undefined)}
-            style={{ backgroundColor: "#A6FF00", paddingVertical: 12, borderRadius: 10, alignItems: "center" }}
-          >
-            <Text style={{ fontWeight: "800" }}>Ajouter un abonnement</Text>
-          </TouchableOpacity>
-        </View>
+            {/* CTA */}
+            <View style={{ marginBottom: 10, width: "100%" }}>
+              <TouchableOpacity
+                onPress={() => navigation.navigate("AddSubscription", spaceId ? { spaceId } : undefined)}
+                style={{ backgroundColor: "#A6FF00", paddingVertical: 12, borderRadius: 10, alignItems: "center" }}
+              >
+                <Text style={{ fontWeight: "800" }}>Ajouter un abonnement</Text>
+              </TouchableOpacity>
+            </View>
 
-        <FlatList
-          data={filtered}
-          keyExtractor={(item) => String(item.id)}
-          renderItem={renderItem}
-          contentContainerStyle={styles.listContentContainer}
-          ListEmptyComponent={<Text style={{ color: "#aaa" }}>Aucun abonnement trouvé.</Text>}
-        />
-      </SafeAreaView>
-    </Layout>
+            {/* Liste */}
+            <FlatList
+              data={filtered}
+              keyExtractor={(item) => String(item.id)}
+              renderItem={renderItem}
+              style={{ width: "100%" }}
+              contentContainerStyle={[styles.contentContainer, styles.listContentContainer]}
+              ListEmptyComponent={<Text style={{ color: "#aaa" }}>Aucun abonnement trouvé.</Text>}
+            />
+          </View>
+        </SafeAreaView>
+      </Layout>
     </RoleGuard>
   );
 }
