@@ -1,5 +1,5 @@
 // src/screens/subscriptions/SubscriptionDetailsScreen.js
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   View, Text, TouchableOpacity, Alert, Platform, ScrollView, ActivityIndicator,
 } from "react-native";
@@ -12,8 +12,9 @@ import AppFooter from "../../ui/AppFooter";
 import useAuth from "../../hooks/useAuth";
 import { json } from "../../services/http";
 import styles from "../../styles/SubscriptionDetailsStyles";
-
 import RoleGuard from "../../guards/RoleGuard";
+
+/* ---------- Helpers ---------- */
 
 const fmtPrice = (amount, currency = "EUR") => {
   if (amount == null) return "—";
@@ -48,6 +49,8 @@ const confirmDelete = async (title, message) => {
   });
 };
 
+/* ---------- Component ---------- */
+
 export default function SubscriptionDetailsScreen() {
   const route = useRoute();
   const navigation = useNavigation();
@@ -63,8 +66,17 @@ export default function SubscriptionDetailsScreen() {
   const [error, setError] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
-  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+  // Paiements
+  const [payments, setPayments] = useState([]);
+  const [loadingPayments, setLoadingPayments] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0); // pour rafraîchir après Payment
 
+  const authHeaders = useMemo(
+    () => (token ? { Authorization: `Bearer ${token}` } : {}),
+    [token]
+  );
+
+  /* ----- Load Subscription (⚠️ pas de dépendance sur `sub`) ----- */
   const fetchOne = useCallback(async () => {
     if (!id && !sub) {
       setLoading(false);
@@ -78,21 +90,52 @@ export default function SubscriptionDetailsScreen() {
       const list = await json("/api/subscription/mine", { headers: { ...authHeaders } });
       const items = Array.isArray(list) ? list : (list?.items ?? []);
       const found = id ? items.find((s) => s.id === id) : null;
-      setSub(found || sub || null);
-      if (!found && !sub) setError("Abonnement introuvable.");
+
+      // évite les setState inutiles qui re-render pour rien
+      setSub((prev) => found ?? prev ?? null);
+
+      if (!found && id) setError("Abonnement introuvable.");
     } catch (e) {
       setError(e?.message || "Impossible de charger l’abonnement.");
     } finally {
       setLoading(false);
     }
-  }, [id, sub, token]);
+  }, [id, authHeaders]); // <— sub retiré ici
 
+  /* ----- Load Payments (filtre côté front) ----- */
+  const loadPayments = useCallback(async () => {
+    if (!id) {
+      setPayments([]);
+      setLoadingPayments(false);
+      return;
+    }
+    try {
+      setLoadingPayments(true);
+      const items = await json(`/api/payment/all?subscriptionId=${encodeURIComponent(id)}`, {
+        headers: { ...authHeaders },
+      });
+      setPayments(Array.isArray(items) ? items : []);
+    } catch {
+      setPayments([]);
+    } finally {
+      setLoadingPayments(false);
+    }
+  }, [id, authHeaders]);
+
+  /* ----- Focus effects (deps stables) ----- */
   useFocusEffect(
     useCallback(() => {
       fetchOne();
-    }, [fetchOne, route.params?.refreshAt])
+    }, [fetchOne])
   );
 
+  useFocusEffect(
+    useCallback(() => {
+      loadPayments();
+    }, [loadPayments, refreshKey])
+  );
+
+  /* ----- Delete ----- */
   const onDelete = useCallback(async () => {
     if (!id) return;
     const ok = await confirmDelete(
@@ -114,9 +157,10 @@ export default function SubscriptionDetailsScreen() {
     } finally {
       setDeleting(false);
     }
-  }, [id, sub, token]);
+  }, [id, sub, authHeaders, navigation]);
 
-  // Écrans d’état
+  /* ---------- UI States ---------- */
+
   if (loading) {
     return (
       <Layout header={<AppHeader />} footer={<AppFooter />} style={{ backgroundColor: "#000" }}>
@@ -142,108 +186,163 @@ export default function SubscriptionDetailsScreen() {
     );
   }
 
+  /* ---------- Render ---------- */
+
   const bs = badgeStyle(sub.status);
   const start = sub.start_date ? new Date(sub.start_date).toLocaleDateString("fr-FR") : "—";
   const end   = sub.end_date   ? new Date(sub.end_date).toLocaleDateString("fr-FR")   : "—";
 
   return (
     <RoleGuard anyOf={["ROLE_USER","ROLE_ADMIN"]}>
-    <Layout header={<AppHeader />} footer={<AppFooter />} style={{ backgroundColor: "#000" }}>
-      <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 24 }}>
-        {/* Header local */}
-        <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn}>
-            <Ionicons name="arrow-back" size={20} color="#000" />
-          </TouchableOpacity>
-          <Text style={styles.title} numberOfLines={1}>{sub.name || "Abonnement"}</Text>
-          <View style={{ width: 36 }} />
-        </View>
-
-        {/* Badge statut */}
-        <View style={[styles.badge, { backgroundColor: bs.bg }]}>
-          <Text style={[styles.badgeText, { color: bs.fg }]}>{bs.label}</Text>
-        </View>
-
-        {/* Carte montant / dates / renouvellement */}
-        <View style={styles.card}>
-          <View style={styles.row}>
-            <Ionicons name="card" size={18} color="#72CE1D" />
-            <Text style={styles.rowLabel}>Montant</Text>
-            <Text style={styles.rowValue}>
-              {fmtPrice(sub.amount, sub.currency)}
-              {sub.billing_frequency ? ` · ${sub.billing_frequency}` : ""}
-            </Text>
+      <Layout header={<AppHeader />} footer={<AppFooter />} style={{ backgroundColor: "#000" }}>
+        <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 24 }}>
+          {/* Header */}
+          <View style={styles.headerRow}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn}>
+              <Ionicons name="arrow-back" size={20} color="#000" />
+            </TouchableOpacity>
+            <Text style={styles.title} numberOfLines={1}>{sub.name || "Abonnement"}</Text>
+            <View style={{ width: 36 }} />
           </View>
 
-          <View style={styles.divider} />
-
-          <View style={styles.row}>
-            <Ionicons name="calendar" size={18} color="#72CE1D" />
-            <Text style={styles.rowLabel}>Date de début</Text>
-            <Text style={styles.rowValue}>{start}</Text>
+          {/* Badge statut */}
+          <View style={[styles.badge, { backgroundColor: bs.bg }]}>
+            <Text style={[styles.badgeText, { color: bs.fg }]}>{bs.label}</Text>
           </View>
 
-          <View style={styles.row}>
-            <Ionicons name="calendar-outline" size={18} color="#72CE1D" />
-            <Text style={styles.rowLabel}>Date de fin</Text>
-            <Text style={styles.rowValue}>{end}</Text>
+          {/* Carte montant / dates / renouvellement */}
+          <View style={styles.card}>
+            <View style={styles.row}>
+              <Ionicons name="card" size={18} color="#72CE1D" />
+              <Text style={styles.rowLabel}>Montant</Text>
+              <Text style={styles.rowValue}>
+                {fmtPrice(sub.amount, sub.currency)}
+                {sub.billing_frequency ? ` · ${sub.billing_frequency}` : ""}
+              </Text>
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.row}>
+              <Ionicons name="calendar" size={18} color="#72CE1D" />
+              <Text style={styles.rowLabel}>Date de début</Text>
+              <Text style={styles.rowValue}>{start}</Text>
+            </View>
+
+            <View style={styles.row}>
+              <Ionicons name="calendar-outline" size={18} color="#72CE1D" />
+              <Text style={styles.rowLabel}>Date de fin</Text>
+              <Text style={styles.rowValue}>{end}</Text>
+            </View>
+
+            <View style={styles.row}>
+              <Ionicons name="reload" size={18} color="#72CE1D" />
+              <Text style={styles.rowLabel}>Renouvellement</Text>
+              <Text style={styles.rowValue}>{sub.auto_renewal ? "Automatique" : "Manuel"}</Text>
+            </View>
           </View>
 
-          <View style={styles.row}>
-            <Ionicons name="reload" size={18} color="#72CE1D" />
-            <Text style={styles.rowLabel}>Renouvellement</Text>
-            <Text style={styles.rowValue}>{sub.auto_renewal ? "Automatique" : "Manuel"}</Text>
-          </View>
-        </View>
+          {/* Détails */}
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Détails</Text>
+            {sub.notes ? <Text style={styles.notes}>{sub.notes}</Text> : <Text style={styles.muted}>Aucune note.</Text>}
 
-        {/* Détails */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Détails</Text>
-          {sub.notes ? <Text style={styles.notes}>{sub.notes}</Text> : <Text style={styles.muted}>Aucune note.</Text>}
-
-          <View style={styles.kv}>
-            <Text style={styles.k}>Mode de paiement</Text>
-            <Text style={styles.v}>{sub.billing_mode || "—"}</Text>
+            <View style={styles.kv}>
+              <Text style={styles.k}>Mode de paiement</Text>
+              <Text style={styles.v}>{sub.billing_mode || "—"}</Text>
+            </View>
+            <View style={styles.kv}>
+              <Text style={styles.k}>Service associé</Text>
+              <Text style={styles.v}>{sub.service?.name || sub.service_name || "—"}</Text>
+            </View>
+            <View style={styles.kv}>
+              <Text style={styles.k}>Utilisateur</Text>
+              <Text style={styles.v}>
+                {sub.member?.user?.firstname || sub.member?.user?.email || sub.member_name || "—"}
+              </Text>
+            </View>
           </View>
-          <View style={styles.kv}>
-            <Text style={styles.k}>Service associé</Text>
-            <Text style={styles.v}>{sub.service?.name || sub.service_name || "—"}</Text>
-          </View>
-          <View style={styles.kv}>
-            <Text style={styles.k}>Utilisateur</Text>
-            <Text style={styles.v}>
-              {sub.member?.user?.firstname || sub.member?.user?.email || sub.member_name || "—"}
-            </Text>
-          </View>
-        </View>
 
-        {/* Actions */}
-        <View style={styles.actionsRow}>
-          <TouchableOpacity
-            style={styles.secondaryBtn}
-            onPress={() => {
-              navigation.navigate("CustomSubscription", {
-                mode: "edit",
-                id,            // id source de vérité
-                snapshot: sub, // pour pré-remplir instantanément
-              });
-            }}
-          >
-            <Ionicons name="create-outline" size={18} color="#000" />
-            <Text style={styles.secondaryBtnText}>Éditer</Text>
-          </TouchableOpacity>
+          {/* Paiements */}
+          <View style={styles.card}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <Text style={styles.sectionTitle}>Paiements</Text>
 
-          <TouchableOpacity
-            style={[styles.dangerBtn, deleting && { opacity: 0.6 }]}
-            onPress={onDelete}
-            disabled={deleting}
-          >
-            <Ionicons name="trash-outline" size={18} color="#fff" />
-            <Text style={styles.dangerBtnText}>{deleting ? "Suppression..." : "Supprimer"}</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </Layout>
+              <TouchableOpacity
+                onPress={() => {
+                  navigation.navigate("Payment", {
+                    subscriptionId: id,
+                    amount: sub.amount,
+                    currency: sub.currency || "EUR",
+                    onPaid: () => setRefreshKey((k) => k + 1), // refresh au retour
+                  });
+                }}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  backgroundColor: "#72CE1D",
+                  borderRadius: 10,
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                }}
+              >
+                <Ionicons name="card-outline" size={18} color="#000" />
+                <Text style={{ color: "#000", fontWeight: "700" }}>Payer</Text>
+              </TouchableOpacity>
+            </View>
+
+            {loadingPayments ? (
+              <View style={{ paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <ActivityIndicator />
+                <Text style={styles.muted}>Chargement des paiements…</Text>
+              </View>
+            ) : payments.length === 0 ? (
+              <Text style={styles.muted}>Aucun paiement pour l’instant.</Text>
+            ) : (
+              payments.map((p) => (
+                <View key={p.id} style={{ backgroundColor: "#1A1A1A", borderRadius: 10, padding: 12, marginBottom: 8 }}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                    <Text style={styles.rowValue}>{fmtPrice(p.amount, p.currency)}</Text>
+                    <Text style={[styles.badgeText, { color: "#C8B6E2" }]}>{p.status}</Text>
+                  </View>
+                  <Text style={styles.muted}>
+                    Méthode : {p.payment_method}
+                    {p.transaction_id ? ` · TX: ${p.transaction_id}` : ""}
+                  </Text>
+                  <Text style={[styles.muted, { marginTop: 2 }]}>#{p.id}</Text>
+                </View>
+              ))
+            )}
+          </View>
+
+          {/* Actions */}
+          <View style={styles.actionsRow}>
+            <TouchableOpacity
+              style={styles.secondaryBtn}
+              onPress={() => {
+                navigation.navigate("CustomSubscription", {
+                  mode: "edit",
+                  id,            // id source de vérité
+                  snapshot: sub, // pour pré-remplir instantanément
+                });
+              }}
+            >
+              <Ionicons name="create-outline" size={18} color="#000" />
+              <Text style={styles.secondaryBtnText}>Éditer</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.dangerBtn, deleting && { opacity: 0.6 }]}
+              onPress={onDelete}
+              disabled={deleting}
+            >
+              <Ionicons name="trash-outline" size={18} color="#fff" />
+              <Text style={styles.dangerBtnText}>{deleting ? "Suppression..." : "Supprimer"}</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </Layout>
     </RoleGuard>
   );
 }

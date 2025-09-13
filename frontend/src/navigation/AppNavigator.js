@@ -27,6 +27,8 @@ import ProfileScreen from "../screens/profile/ProfileScreen";
 
 import NotificationsScreen from "../screens/notifications/NotificationsScreen";
 
+import PaymentScreen from "../screens/payments/PaymentScreen";
+
 import ServicesAdminScreen from "../screens/admin/ServicesAdminScreen";
 import CategoriesAdminScreen from "../screens/admin/CategoriesAdminScreen";
 
@@ -89,6 +91,7 @@ export default function AppNavigator() {
           <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: "Notifications" }} />
           <Stack.Screen name="CategoriesAdmin" component={CategoriesAdminScreen} options={{ title: "Catégories (admin)" }} />
           <Stack.Screen name="ServicesAdmin" component={ServicesAdminScreen} options={{ title: "Services (admin)" }} />
+          <Stack.Screen name="Payment" component={PaymentScreen} options={{ title: "Paiement" }} />
         </Stack.Navigator>
       ) : (
         <Stack.Navigator screenOptions={{ headerShown:false, animation:"fade" }}>
