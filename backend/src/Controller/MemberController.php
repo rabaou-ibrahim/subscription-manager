@@ -232,54 +232,49 @@ public function create(
 }
 
 
-    #[Route('/all', name: 'get_all_spaces', methods: ['GET'])]
+    #[Route('/all', name: 'get_all_members', methods: ['GET'])]
     #[IsGranted('IS_AUTHENTICATED_FULLY')]
-    public function getAllSpaces(EntityManagerInterface $em): JsonResponse
+    public function getAllMembers(Request $req, EntityManagerInterface $em): JsonResponse
     {
         $me = $this->getUser();
+        $spaceId = (string)($req->query->get('space_id') ?? '');
 
-        $qb = $em->getRepository(Space::class)->createQueryBuilder('s')
-            ->leftJoin('s.createdBy', 'cb')->addSelect('cb');
+        $qb = $em->getRepository(\App\Entity\Member::class)->createQueryBuilder('m')
+            ->leftJoin('m.user', 'u')->addSelect('u')
+            ->leftJoin('m.space', 's')->addSelect('s');
 
-        // ⚠️ pas de addSelect('m')/addSelect('mu') pour éviter DISTINCT sur json
+        if ($spaceId !== '') {
+            $qb->andWhere('s.id = :sid')->setParameter('sid', $spaceId);
+        }
+
         if (!$this->isGranted('ROLE_ADMIN')) {
-            // Filtrer via un EXISTS plutôt que joindre mu.*
-            $qb->andWhere('cb = :me OR EXISTS (
+            $qb->andWhere('u = :me OR EXISTS (
                 SELECT 1 FROM App\Entity\Member mm
                 WHERE mm.space = s AND mm.user = :me
             )')->setParameter('me', $me);
         }
 
-        $spaces = $qb->getQuery()->getResult();
+        $members = $qb->getQuery()->getResult();
 
-        $data = array_map(function (Space $space) use ($me) {
-            // Déterminer le "rôle" de l’utilisateur sur chaque space
-            $role = 'viewer';
-            if ($space->getCreatedBy()?->getId() === $me->getId()) {
-                $role = 'owner';
-            } else {
-                foreach ($space->getMembers() as $mm) {
-                    if ($mm->getUser()?->getId() === $me->getId()) { $role = 'member'; break; }
-                }
-            }
-
+        $map = function(\App\Entity\Member $m) use ($me) {
             return [
-                'id'          => $space->getId(),
-                'name'        => $space->getName(),
-                'visibility'  => $space->getVisibility(),
-                'description' => $space->getDescription(),
-                'logo'        => $space->getLogo(),
-                'created_at'  => $space->getCreatedAt()?->format('Y-m-d\TH:i:sP'),
-                'created_by'  => [
-                    'id'        => $space->getCreatedBy()?->getId(),
-                    'email'     => $space->getCreatedBy()?->getEmail(),
-                    'full_name' => $space->getCreatedBy()?->getFullName(),
+                'id'            => $m->getId(),
+                'is_me'         => $m->getUser()?->getId() === $me?->getId(),
+                'relationship'  => $m->getRelationship(),
+                'date_of_birth' => $m->getDateOfBirth()?->format('Y-m-d'),
+                'user' => [
+                    'id'        => $m->getUser()?->getId(),
+                    'email'     => $m->getUser()?->getEmail(),
+                    'full_name' => method_exists($m->getUser(), 'getFullName') ? $m->getUser()->getFullName() : null,
                 ],
-                'role'        => $role, // ← utile pour le badge “Propriétaire / Membre”
+                'space' => [
+                    'id'   => $m->getSpace()?->getId(),
+                    'name' => $m->getSpace()?->getName(),
+                ],
             ];
-        }, $spaces);
+        };
 
-        return $this->json($data);
+        return $this->json(array_map($map, $members));
     }
 
 

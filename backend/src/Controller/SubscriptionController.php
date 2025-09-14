@@ -399,7 +399,6 @@ class SubscriptionController extends AbstractController
         }
 
         $user = $this->getUser();
-
         if (
             !$this->isGranted('ROLE_ADMIN') &&
             $subscription->getUser()?->getId() !== $user?->getId() &&
@@ -408,7 +407,13 @@ class SubscriptionController extends AbstractController
             return $this->json(['error' => 'Forbidden'], 403);
         }
 
+        // suppression + flush + réponse JSON
+        $em->remove($subscription);
+        $em->flush();
+
+        return $this->json(['message' => 'Subscription deleted', 'id' => $id], 200);
     }
+
 
     #[Route('/mine', name: 'get_my_subscriptions', methods: ['GET'])]
     #[IsGranted('IS_AUTHENTICATED_FULLY')]
