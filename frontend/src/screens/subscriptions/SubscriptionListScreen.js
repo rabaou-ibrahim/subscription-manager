@@ -21,6 +21,9 @@ export default function SubscriptionListScreen() {
   const { token, isLogged, roles } = useAuth();
   const isAdmin = Array.isArray(roles) && roles.includes("ROLE_ADMIN");
 
+  const FREQ_LABEL = { monthly:"Mensuel", yearly:"Annuel", weekly:"Hebdomadaire", daily:"Quotidien" };
+  const frFreq = (v) => FREQ_LABEL[v] || v || "—";
+
   const authHeaders = useMemo(
     () => (token ? { Authorization: `Bearer ${token}` } : {}),
     [token]
@@ -120,7 +123,7 @@ export default function SubscriptionListScreen() {
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={styles.title} numberOfLines={1}>{item.name || "Sans nom"}</Text>
           <Text style={styles.subtitle}>
-            {money(item.amount, item.currency)}{item.billing_frequency ? ` · ${item.billing_frequency}` : ""}
+            {money(item.amount, item.currency)}{item.billing_frequency ? ` · ${frFreq(item.billing_frequency)}` : ""}
           </Text>
         </View>
       </TouchableOpacity>
