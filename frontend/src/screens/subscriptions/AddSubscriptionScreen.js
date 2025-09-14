@@ -1,9 +1,7 @@
 // src/screens/subscriptions/AddSubscriptionScreen.js
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  View, Text, TouchableOpacity, TextInput, SafeAreaView, Alert,
-  Switch, Platform, ScrollView, KeyboardAvoidingView,
-} from "react-native";
+import { View, Text, TouchableOpacity, TextInput, SafeAreaView, Alert,
+Switch, Platform, ScrollView, KeyboardAvoidingView, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useRoute, useNavigation } from "@react-navigation/native";
@@ -82,6 +80,19 @@ export default function AddSubscriptionScreen() {
   const [spaceId,  setSpaceId]  = useState(initialSpaceId);
   const [resolving, setResolving] = useState(false);
 
+  const isoToFR = (iso) => {
+    if (!iso) return "";
+    const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return "";
+    return `${m[3]}/${m[2]}/${m[1]}`; // JJ/MM/AAAA
+  };
+  const frToISO = (fr) => {
+    if (!fr) return "";
+    const m = fr.match(/^(\d{2})[\/.\-](\d{2})[\/.\-](\d{4})$/);
+    if (!m) return "";
+    return `${m[3]}-${m[2]}-${m[1]}`; // YYYY-MM-DD
+  };
+
   // services
   const [services, setServices] = useState([]);
   useEffect(() => {
@@ -106,6 +117,8 @@ export default function AddSubscriptionScreen() {
   const [cycle, setCycle] = useState("monthly");
   const [startDate, setStartDate] = useState(fmtDate(new Date()));
   const [endDate, setEndDate]     = useState("");
+  const [startDateFR, setStartDateFR] = useState(isoToFR(startDate));
+  const [endDateFR, setEndDateFR]     = useState(isoToFR(endDate));
 
   const [billingMode, setBillingMode] = useState("unknown");
   const [autoRenewal, setAutoRenewal] = useState(false);
@@ -174,16 +187,20 @@ export default function AddSubscriptionScreen() {
   }, [services]);
   const selectedService = serviceItems.find(x => x.value === serviceId);
 
-  const validate = () => {
-    if (!serviceId) return "Choisis un service.";
-    if (!name || name.trim().length < 2) return "Le nom est requis (≥ 2 caractères).";
-    if (!startDate || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return "La date de début doit être YYYY-MM-DD.";
-    if (!FREQUENCY_OPTIONS.some(o => o.value === cycle)) return "Fréquence invalide.";
-    if (!CURRENCY_OPTIONS.some(o => o.value === currency)) return "Devise invalide.";
-    if (!STATUS_OPTIONS.some(o => o.value === status)) return "Statut invalide.";
+  const startISO = Platform.OS === "web" ? (frToISO(startDateFR) || "") : startDate;
+const endISO   = Platform.OS === "web" ? (endDateFR ? frToISO(endDateFR) : "") : endDate;
+
+const validate = () => {
+  if (!serviceId) return "Choisis un service.";
+  if (!name || name.trim().length < 2) return "Le nom est requis (≥ 2 caractères).";
+  if (!startISO || !/^\d{4}-\d{2}-\d{2}$/.test(startISO)) return "La date de début doit être JJ/MM/AAAA.";
+  if (!FREQUENCY_OPTIONS.some(o => o.value === cycle)) return "Fréquence invalide.";
+  if (!CURRENCY_OPTIONS.some(o => o.value === currency)) return "Devise invalide.";
+  if (!STATUS_OPTIONS.some(o => o.value === status)) return "Statut invalide.";
     if (!BILLING_OPTIONS.some(o => o.value === billingMode)) return "Mode de facturation invalide.";
     return null;
   };
+
 
   const handleCreate = async () => {
     const err = validate();
@@ -194,8 +211,8 @@ export default function AddSubscriptionScreen() {
       name: name.trim(),
       subscription_type: "custom",
       billing_frequency: cycle,
-      start_date: startDate,
-      end_date: endDate || null,
+      start_date: startISO,
+      end_date: endISO || null,
       billing_mode: billingMode,
       auto_renewal: !!autoRenewal,
       status,
@@ -237,12 +254,25 @@ export default function AddSubscriptionScreen() {
                 {resolving ? (<Text style={{ color: "#9cdcfe", marginBottom: 8 }}>Préparation…</Text>) : null}
 
                 {/* Service */}
-                <Text style={[styles.label, textWhite]}>Service</Text>
+                <Text style={[styles.label, { color:"#fff" }]}>Service</Text>
                 <TouchableOpacity
-                  style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
+                  style={[styles.input, { flexDirection:"row", alignItems:"center", justifyContent:"space-between", gap:10 }]}
                   onPress={() => setShowService(true)}
                 >
-                  <Text style={{ color: "#eee" }}>{selectedService?.label || "Sélectionner"}</Text>
+                  <View style={{ flexDirection:"row", alignItems:"center", gap:10, flex:1 }}>
+                    {selectedService?.icon ? (
+                      <img
+                        src={selectedService.icon}
+                        alt=""
+                        style={{ width:20, height:20, borderRadius:4, objectFit:"cover" }}
+                      />
+                    ) : (
+                      <View style={{ width:20, height:20, borderRadius:4, backgroundColor:"#1f1f1f" }} />
+                    )}
+                    <Text style={{ color:"#eee", flexShrink:1 }} numberOfLines={1}>
+                      {selectedService?.label || "Sélectionner"}
+                    </Text>
+                  </View>
                   <Ionicons name="chevron-down" size={20} color="#72CE1D" />
                 </TouchableOpacity>
 
@@ -299,15 +329,17 @@ export default function AddSubscriptionScreen() {
                 </TouchableOpacity>
 
                 {/* Début */}
-                <Text style={[styles.label, textWhite]}>Début</Text>
+                <Text style={[styles.label, { color:"#fff" }]}>Début</Text>
                 {Platform.OS === "web" ? (
-                  <TextInput
-                    style={[styles.input, textWhite]}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor={placeholderCol}
-                    value={startDate}
-                    onChangeText={setStartDate}
-                  />
+                  <View style={[styles.input, { paddingVertical: 6, justifyContent:"center" }]}>
+                    <input
+                      type="date"
+                      lang="fr-FR"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      style={{ width:"100%", background:"transparent", border:"none", outline:"none", color:"#eee" }}
+                    />
+                  </View>
                 ) : (
                   <TouchableOpacity
                     style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
@@ -318,16 +350,18 @@ export default function AddSubscriptionScreen() {
                   </TouchableOpacity>
                 )}
 
-                {/* Fin */}
-                <Text style={[styles.label, textWhite]}>Fin (optionnel)</Text>
+                {/* Fin (optionnel) */}
+                <Text style={[styles.label, { color:"#fff" }]}>Fin (optionnel)</Text>
                 {Platform.OS === "web" ? (
-                  <TextInput
-                    style={[styles.input, textWhite]}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor={placeholderCol}
-                    value={endDate}
-                    onChangeText={setEndDate}
-                  />
+                  <View style={[styles.input, { paddingVertical: 6, justifyContent:"center" }]}>
+                    <input
+                      type="date"
+                      lang="fr-FR"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      style={{ width:"100%", background:"transparent", border:"none", outline:"none", color:"#eee" }}
+                    />
+                  </View>
                 ) : (
                   <TouchableOpacity
                     style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}

@@ -16,6 +16,14 @@ import RoleGuard from "../../guards/RoleGuard";
 
 /* ---------- Helpers ---------- */
 
+const FREQ_LABEL = { monthly:"Mensuel", yearly:"Annuel", weekly:"Hebdomadaire", daily:"Quotidien" };
+const BILLING_LABEL = {
+  unknown:"Inconnu", credit_card:"Carte bancaire", sepa:"Prélèvement SEPA",
+  paypal:"PayPal", cash:"Espèces", other:"Autre"
+};
+const frFreq = (v) => FREQ_LABEL[v] || v || "—";
+const frBilling = (v) => BILLING_LABEL[v] || v || "—";
+
 const fmtPrice = (amount, currency = "EUR") => {
   if (amount == null) return "—";
   try {
@@ -217,7 +225,7 @@ export default function SubscriptionDetailsScreen() {
               <Text style={styles.rowLabel}>Montant</Text>
               <Text style={styles.rowValue}>
                 {fmtPrice(sub.amount, sub.currency)}
-                {sub.billing_frequency ? ` · ${sub.billing_frequency}` : ""}
+                {sub.billing_frequency ? ` · ${frFreq(sub.billing_frequency)}` : ""}
               </Text>
             </View>
 
@@ -249,7 +257,7 @@ export default function SubscriptionDetailsScreen() {
 
             <View style={styles.kv}>
               <Text style={styles.k}>Mode de paiement</Text>
-              <Text style={styles.v}>{sub.billing_mode || "—"}</Text>
+              <Text style={styles.v}>{frBilling(sub.billing_mode)}</Text>
             </View>
             <View style={styles.kv}>
               <Text style={styles.k}>Service associé</Text>
