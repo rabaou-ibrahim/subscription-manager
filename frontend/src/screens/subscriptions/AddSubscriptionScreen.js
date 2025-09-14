@@ -1,7 +1,9 @@
 // src/screens/subscriptions/AddSubscriptionScreen.js
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, TouchableOpacity, TextInput, SafeAreaView, Alert,
-Switch, Platform, ScrollView, KeyboardAvoidingView, Image } from "react-native";
+import {
+  View, Text, TouchableOpacity, TextInput, SafeAreaView, Alert,
+  Switch, Platform, ScrollView, KeyboardAvoidingView, Image, Pressable
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useRoute, useNavigation } from "@react-navigation/native";
@@ -17,7 +19,6 @@ import styles from "../../styles/AddSubscriptionStyles";
 import RoleGuard from "../../guards/RoleGuard";
 import { getServiceIconUrl } from "../../util/serviceIcon";
 
-// ==== options (valeur backend -> libellé FR) ====
 const CURRENCY_OPTIONS = [
   { value: "EUR", label: "€ EUR" },
   { value: "USD", label: "$ USD" },
@@ -45,14 +46,11 @@ const BILLING_OPTIONS = [
 const STATUS_OPTIONS = [
   { value: "active",   label: "Actif" },
   { value: "inactive", label: "Inactif" },
-  // { value: "cancelled",label: "Annulé" },
-  // { value: "expired",  label: "Expiré" },
 ];
 
 const toLabel = (opts, v) => opts.find(o => o.value === v)?.label || v;
 const toOptions = (opts) => opts.map(o => o.label);
 const fromLabel = (opts, label) => (opts.find(o => o.label === label) || opts[0]).value;
-
 
 const twoDecimals = (v) => {
   const n = Number(String(v ?? "").replace(",", "."));
@@ -71,27 +69,12 @@ export default function AddSubscriptionScreen() {
   const { token, user } = useAuth();
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
-  // facultatif
   const initialMemberId = route.params?.memberId ?? null;
   const initialSpaceId  = route.params?.spaceId ?? null;
 
-  // cible (espace/membre)
   const [memberId, setMemberId] = useState(initialMemberId);
   const [spaceId,  setSpaceId]  = useState(initialSpaceId);
   const [resolving, setResolving] = useState(false);
-
-  const isoToFR = (iso) => {
-    if (!iso) return "";
-    const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (!m) return "";
-    return `${m[3]}/${m[2]}/${m[1]}`; // JJ/MM/AAAA
-  };
-  const frToISO = (fr) => {
-    if (!fr) return "";
-    const m = fr.match(/^(\d{2})[\/.\-](\d{2})[\/.\-](\d{4})$/);
-    if (!m) return "";
-    return `${m[3]}-${m[2]}-${m[1]}`; // YYYY-MM-DD
-  };
 
   // services
   const [services, setServices] = useState([]);
@@ -117,8 +100,6 @@ export default function AddSubscriptionScreen() {
   const [cycle, setCycle] = useState("monthly");
   const [startDate, setStartDate] = useState(fmtDate(new Date()));
   const [endDate, setEndDate]     = useState("");
-  const [startDateFR, setStartDateFR] = useState(isoToFR(startDate));
-  const [endDateFR, setEndDateFR]     = useState(isoToFR(endDate));
 
   const [billingMode, setBillingMode] = useState("unknown");
   const [autoRenewal, setAutoRenewal] = useState(false);
@@ -135,10 +116,12 @@ export default function AddSubscriptionScreen() {
     navigation.setOptions?.({ title: "Nouvel abonnement" });
   }, [navigation]);
 
-  // résolution auto du memberId s’il n’est pas fourni
+  // === Résolution *non bloquante* du memberId (pas de création auto d'espace) ===
   useEffect(() => {
     if (memberId || !token) return;
+    let cancelled = false;
     setResolving(true);
+
     (async () => {
       try {
         const data = await json("/api/space/all", { headers: { ...authHeaders } });
@@ -147,6 +130,7 @@ export default function AddSubscriptionScreen() {
           ? [{ id: initialSpaceId }, ...spaces.filter(s => s.id !== initialSpaceId)]
           : spaces;
 
+        // essaie d’inférer un memberId si l’API renvoie l’info inline
         for (const sp of ordered) {
           const inline =
             sp.my_member_id ||
@@ -155,26 +139,24 @@ export default function AddSubscriptionScreen() {
             sp.members?.find?.(m => m?.user?.id === user?.id)?.id ||
             (user?.email ? sp.members?.find?.(m => m?.user?.email === user.email)?.id : null);
 
-          if (inline) { setMemberId(inline); setSpaceId(prev => prev ?? sp.id); return; }
-
-          try {
-            const allMembers = await json("/api/member/all", { headers: { ...authHeaders } });
-            const arr = Array.isArray(allMembers) ? allMembers : (allMembers?.items ?? []);
-
-            const me =
-              arr.find(m => m?.is_me && (m?.space?.id === sp.id || m?.space_id === sp.id)) ||
-              arr.find(m => (m?.user?.id === user?.id) && (m?.space?.id === sp.id || m?.space_id === sp.id)) ||
-              (user?.email ? arr.find(m => (m?.user?.email === user.email) && (m?.space?.id === sp.id || m?.space_id === sp.id)) : null);
-
-            if (me?.id) { setMemberId(me.id); setSpaceId(prev => prev ?? sp.id); return; }
-          } catch {}
+          if (inline) {
+            if (!cancelled) {
+              setMemberId(inline);
+              setSpaceId(prev => prev ?? sp.id);
+            }
+            return;
+          }
         }
+
+        // Sinon, on ne fait rien : création perso (member_id absent)
       } catch (e) {
         console.warn("resolve memberId:", e?.message || e);
       } finally {
-        setResolving(false);
+        if (!cancelled) setResolving(false);
       }
     })();
+
+    return () => { cancelled = true; };
   }, [memberId, token, user, initialSpaceId]);
 
   // items du picker service (avec icône)
@@ -182,27 +164,32 @@ export default function AddSubscriptionScreen() {
     return services.map(s => ({
       label: s.name ?? s.title ?? s.id,
       value: s.id,
-      icon: getServiceIconUrl(s) || undefined, // favicon / logo si dispo
+      icon: getServiceIconUrl(s) || undefined,
     }));
   }, [services]);
   const selectedService = serviceItems.find(x => x.value === serviceId);
 
-  const startISO = Platform.OS === "web" ? (frToISO(startDateFR) || "") : startDate;
-const endISO   = Platform.OS === "web" ? (endDateFR ? frToISO(endDateFR) : "") : endDate;
+  // web → envoyer "YYYY-MM-DD"
+  const startISO = Platform.OS === "web" ? (startDate || "") : startDate;
+  const endISO   = Platform.OS === "web" ? (endDate   || "") : endDate;
 
-const validate = () => {
-  if (!serviceId) return "Choisis un service.";
-  if (!name || name.trim().length < 2) return "Le nom est requis (≥ 2 caractères).";
-  if (!startISO || !/^\d{4}-\d{2}-\d{2}$/.test(startISO)) return "La date de début doit être JJ/MM/AAAA.";
-  if (!FREQUENCY_OPTIONS.some(o => o.value === cycle)) return "Fréquence invalide.";
-  if (!CURRENCY_OPTIONS.some(o => o.value === currency)) return "Devise invalide.";
-  if (!STATUS_OPTIONS.some(o => o.value === status)) return "Statut invalide.";
+  const validate = () => {
+    if (!serviceId) return "Choisis un service.";
+    if (!name || name.trim().length < 2) return "Le nom est requis (≥ 2 caractères).";
+    if (!startISO || !/^\d{4}-\d{2}-\d{2}$/.test(startISO)) return "La date de début doit être JJ/MM/AAAA.";
+    if (!FREQUENCY_OPTIONS.some(o => o.value === cycle)) return "Fréquence invalide.";
+    if (!CURRENCY_OPTIONS.some(o => o.value === currency)) return "Devise invalide.";
+    if (!STATUS_OPTIONS.some(o => o.value === status)) return "Statut invalide.";
     if (!BILLING_OPTIONS.some(o => o.value === billingMode)) return "Mode de facturation invalide.";
     return null;
   };
 
-
   const handleCreate = async () => {
+    console.log("[AddSub] click", { resolving, memberId, serviceId, name, startISO, endISO });
+    if (resolving) {
+      Alert.alert("Encore 1 seconde", "On prépare ton espace…");
+      return;
+    }
     const err = validate();
     if (err) return Alert.alert("Validation", err);
 
@@ -219,7 +206,7 @@ const validate = () => {
       notes: notes?.trim() || null,
       amount: twoDecimals(amount),
       currency,
-      ...(memberId ? { member_id: memberId } : {}),
+      ...(memberId ? { member_id: memberId } : {}), // ← perso si absent
     };
 
     try {
@@ -239,6 +226,13 @@ const validate = () => {
     } catch (e) {
       Alert.alert("Erreur", e?.message || "Création impossible");
     }
+  };
+
+  const onCreate = (e) => {
+    if (e?.preventDefault) e.preventDefault();
+    if (e?.stopPropagation) e.stopPropagation();
+    if (resolving) return;
+    handleCreate();
   };
 
   const textWhite = { color: "#fff" };
@@ -261,11 +255,11 @@ const validate = () => {
                 >
                   <View style={{ flexDirection:"row", alignItems:"center", gap:10, flex:1 }}>
                     {selectedService?.icon ? (
-                        Platform.OS === 'web' ? (
-                          <img src={selectedService.icon} alt="" style={{ width:20, height:20, borderRadius:4, objectFit:"cover" }} />
-                        ) : (
-                          <Image source={{ uri: selectedService.icon }} style={{ width:20, height:20, borderRadius:4 }} />
-                        )
+                      Platform.OS === 'web' ? (
+                        <img src={selectedService.icon} alt="" style={{ width:20, height:20, borderRadius:4, objectFit:"cover" }} />
+                      ) : (
+                        <Image source={{ uri: selectedService.icon }} style={{ width:20, height:20, borderRadius:4 }} />
+                      )
                     ) : (
                       <View style={{ width:20, height:20, borderRadius:4, backgroundColor:"#1f1f1f" }} />
                     )}
@@ -400,16 +394,31 @@ const validate = () => {
               </View>
             </ScrollView>
 
-            <TouchableOpacity style={styles.button} onPress={handleCreate}>
-              <Text style={styles.buttonText}>Créer</Text>
-            </TouchableOpacity>
+            {Platform.OS === "web" ? (
+              <Pressable
+                onClick={onCreate}
+                role="button"
+                aria-label="Créer l’abonnement"
+                style={[styles.button, resolving && { opacity: .6, pointerEvents: "none" }]}
+              >
+                <Text style={styles.buttonText}>{resolving ? "Préparation…" : "Créer"}</Text>
+              </Pressable>
+            ) : (
+              <TouchableOpacity
+                style={[styles.button, resolving && { opacity: .6 }]}
+                disabled={resolving}
+                onPress={onCreate}
+              >
+                <Text style={styles.buttonText}>{resolving ? "Préparation…" : "Créer"}</Text>
+              </TouchableOpacity>
+            )}
           </KeyboardAvoidingView>
 
           {/* === Modals === */}
           <ServicePickerModal
             visible={showService}
             title="Choisir un service"
-            items={serviceItems}                
+            items={serviceItems}
             selectedValue={serviceId}
             onPick={(item) => { setServiceId(item.value); setShowService(false); }}
             onClose={() => setShowService(false)}
