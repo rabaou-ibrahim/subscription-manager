@@ -3,7 +3,11 @@
 namespace App\Controller;
 
 use App\Entity\Space;
+use App\Entity\Invitation;        // ⬅️ add
+use App\Entity\Member;                  
 use App\Repository\SpaceRepository;
+use App\Repository\MemberRepository;         
+use App\Repository\InvitationRepository;     
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -105,64 +109,139 @@ public function createSpace(
 }
 
 
-    #[Route('/all', name: 'get_all_spaces', methods: ['GET'])]
+#[Route('/all', name: 'get_all_spaces', methods: ['GET'])]
 #[IsGranted('IS_AUTHENTICATED_FULLY')]
 public function getAllSpaces(EntityManagerInterface $em): JsonResponse
 {
-    $me = $this->getUser();
+    $me    = $this->getUser();
+    $email = strtolower($me->getEmail() ?? '');
 
-    $qb = $em->getRepository(Space::class)->createQueryBuilder('s')
-        ->leftJoin('s.createdBy', 'cb')->addSelect('cb')
-        ->leftJoin('s.members', 'm')->addSelect('m')
-        ->leftJoin('m.user', 'mu')->addSelect('mu');
-
-    if (!$this->isGranted('ROLE_ADMIN')) {
-        $qb->andWhere('cb = :me OR mu = :me')->setParameter('me', $me);
-    }
+    // On récupère les espaces où je suis owner, membre OU invité (pending)
+    $qb = $em->createQueryBuilder()
+        ->select('s', 'cb')
+        ->from(Space::class, 's')
+        ->leftJoin('s.createdBy', 'cb')
+        ->andWhere('cb = :me OR EXISTS (
+            SELECT 1 FROM '.Member::class.' mm
+            WHERE mm.space = s AND mm.user = :me
+        ) OR EXISTS (
+            SELECT 1 FROM '.Invitation::class.' inv
+            WHERE inv.space = s AND LOWER(inv.email) = :em AND inv.status = :st
+        )')
+        ->setParameter('me', $me)
+        ->setParameter('em', $email)
+        ->setParameter('st', Invitation::STATUS_PENDING);
 
     $spaces = $qb->getQuery()->getResult();
 
-    $data = array_map(fn(Space $space) => [
-        'id'          => $space->getId(),
-        'name'        => $space->getName(),
-        'visibility'  => $space->getVisibility(),
-        'description' => $space->getDescription(),
-        'logo'        => $space->getLogo(),
-        'created_at'  => $space->getCreatedAt()?->format('Y-m-d\TH:i:sP'),
-        'created_by'  => [
-            'id'        => $space->getCreatedBy()?->getId(),
-            'email'     => $space->getCreatedBy()?->getEmail(),
-            'full_name' => $space->getCreatedBy()?->getFullName(),
-        ]
-    ], $spaces);
+    $data = array_map(function (Space $space) use ($me, $em, $email) {
+        $isOwner = $space->getCreatedBy()?->getId() === $me->getId();
+
+        // bool membre ?
+        $isMember = (bool)$em->createQueryBuilder()
+            ->select('COUNT(mm.id)')
+            ->from(Member::class, 'mm')
+            ->andWhere('mm.space = :s')->setParameter('s', $space)
+            ->andWhere('mm.user = :u')->setParameter('u', $me)
+            ->getQuery()->getSingleScalarResult();
+
+        // bool invité pending ?
+        $hasInvite = (bool)$em->createQueryBuilder()
+            ->select('COUNT(inv.id)')
+            ->from(Invitation::class, 'inv')
+            ->andWhere('inv.space = :s')->setParameter('s', $space)
+            ->andWhere('LOWER(inv.email) = :em')->setParameter('em', $email)
+            ->andWhere('inv.status = :st')->setParameter('st', Invitation::STATUS_PENDING)
+            ->getQuery()->getSingleScalarResult();
+
+        $role =
+            $isOwner ? 'owner' :
+            (\in_array('ROLE_ADMIN', $me->getRoles(), true) ? 'admin' :
+            ($isMember ? 'member' : ($hasInvite ? 'invited' : 'unknown')));
+
+        return [
+            'id'          => $space->getId(),
+            'name'        => $space->getName(),
+            'visibility'  => $space->getVisibility(),
+            'description' => $space->getDescription(),
+            'logo'        => $space->getLogo(),
+            'created_at'  => $space->getCreatedAt()?->format('Y-m-d\TH:i:sP'),
+            'created_by'  => [
+                'id'        => $space->getCreatedBy()?->getId(),
+                'email'     => $space->getCreatedBy()?->getEmail(),
+                'full_name' => $space->getCreatedBy()?->getFullName(),
+            ],
+            'role'        => $role,
+        ];
+    }, $spaces);
 
     return $this->json($data);
 }
 
 
-    /**
-     * @OA\Get(path="/api/space/{id}", summary="Récupérer un espace par son ID")
-     */
+    #[IsGranted('IS_AUTHENTICATED_FULLY')]
     #[Route('/{id}', name: 'get_space_by_id', methods: ['GET'])]
-    public function getSpaceById(string $id, SpaceRepository $spaceRepository): JsonResponse
-    {
+    public function getSpaceById(
+        string $id,
+        SpaceRepository $spaceRepository,
+        MemberRepository $memberRepo,
+        InvitationRepository $invRepo
+    ): JsonResponse {
         $space = $spaceRepository->find($id);
         if (!$space) {
             return $this->json(['error' => 'Espace non trouvé'], Response::HTTP_NOT_FOUND);
         }
 
+        $me    = $this->getUser();
+        $email = strtolower($me->getEmail() ?? '');
+
+        $isOwner  = $space->getCreatedBy()?->getId() === $me->getId();
+        $isAdmin  = \in_array('ROLE_ADMIN', $me->getRoles(), true);
+
+        $isMember = (bool)$memberRepo->createQueryBuilder('m')
+            ->select('COUNT(m.id)')
+            ->andWhere('m.space = :s')->setParameter('s', $space)
+            ->andWhere('m.user  = :u')->setParameter('u', $me)
+            ->getQuery()->getSingleScalarResult();
+
+        $hasInvite = (bool)$invRepo->createQueryBuilder('i')
+            ->select('COUNT(i.id)')
+            ->andWhere('i.space = :s')->setParameter('s', $space)
+            ->andWhere('LOWER(i.email) = :em')->setParameter('em', $email)
+            ->andWhere('i.status = :st')->setParameter('st', Invitation::STATUS_PENDING)
+            ->getQuery()->getSingleScalarResult();
+
+        if (!($isOwner || $isAdmin || $isMember || $hasInvite)) {
+            // L’espace existe, mais l’utilisateur n’a aucun lien → 403
+            return $this->json(['error' => 'Accès refusé'], Response::HTTP_FORBIDDEN);
+        }
+
+        $role =
+            $isOwner ? 'owner' :
+            ($isAdmin ? 'admin' :
+            ($isMember ? 'member' : 'invited'));
+
+        $permissions = [
+            'canManage'             => $isOwner || $isAdmin,            // modifier espace, gérer membres & invitations
+            'canViewMembers'        => $isOwner || $isAdmin,            // voir la liste des membres
+            'canInvite'             => $isOwner || $isAdmin,
+            'canCreateSubscription' => $isOwner || $isAdmin || $isMember,
+        ];
+
         return $this->json([
-            'id' => $space->getId(),
-            'name' => $space->getName(),
-            'visibility' => $space->getVisibility(),
+            'id'          => $space->getId(),
+            'name'        => $space->getName(),
+            'visibility'  => $space->getVisibility(),
             'description' => $space->getDescription(),
-            'logo' => $space->getLogo(),
-            'created_at' => $space->getCreatedAt()?->format('Y-m-d\TH:i:sP'),
-            'created_by' => [
-                'id' => $space->getCreatedBy()?->getId(),
-                'email' => $space->getCreatedBy()?->getEmail(),
-                'full_name' => $space->getCreatedBy()?->getFullName()
-            ]
+            'logo'        => $space->getLogo(),
+            'created_at'  => $space->getCreatedAt()?->format('Y-m-d\TH:i:sP'),
+            'created_by'  => [
+                'id'        => $space->getCreatedBy()?->getId(),
+                'email'     => $space->getCreatedBy()?->getEmail(),
+                'full_name' => $space->getCreatedBy()?->getFullName(),
+            ],
+            'role'        => $role,
+            'permissions' => $permissions,
         ]);
     }
 

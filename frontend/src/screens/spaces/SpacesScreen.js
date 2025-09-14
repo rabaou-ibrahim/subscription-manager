@@ -13,9 +13,37 @@ import useAuth from "../../hooks/useAuth";
 import { json } from "../../services/http";
 import RoleGuard from "../../guards/RoleGuard";
 
+const ROLE_META = {
+  owner:   { label: "Owner",  icon: "ribbon-outline",            bg: "#0ea5e9", fg: "#000" },
+  admin:   { label: "Admin",  icon: "shield-checkmark-outline",  bg: "#a78bfa", fg: "#000" },
+  member:  { label: "Membre", icon: "people-outline",            bg: "#34d399", fg: "#000" },
+  invited: { label: "Invité", icon: "mail-unread-outline",       bg: "#f59e0b", fg: "#000" },
+  unknown: { label: "—",      icon: "help-circle-outline",       bg: "#6b7280", fg: "#000" },
+};
+
+function RoleBadge({ role }) {
+  const r = ROLE_META[role] || ROLE_META.unknown;
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        backgroundColor: r.bg,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 999,
+      }}
+    >
+      <Ionicons name={r.icon} size={12} color={r.fg} />
+      <Text style={{ color: r.fg, fontWeight: "700", fontSize: 11 }}>{r.label}</Text>
+    </View>
+  );
+}
+
 export default function SpacesScreen() {
   const navigation = useNavigation();
-  const { token, isLogged } = useAuth();
+  const { token, isLogged, user } = useAuth();
 
   const [spaces, setSpaces] = useState([]);
   const [pending, setPending] = useState(false);
@@ -29,28 +57,31 @@ export default function SpacesScreen() {
   // Barrière anti-doublons + abort propre
   const inflightRef = useRef(false);
 
-  const load = useCallback(async (signal) => {
-    if (!isLogged || inflightRef.current) return;
-    inflightRef.current = true;
-    setPending(true);
-    setError(null);
-    try {
-      const data = await json("/api/space/all", {
-        headers: { ...authHeaders },
-        signal, // si ton helper http gère signal ; sinon ignoré
-      });
-      if (signal?.aborted) return;
-      const list = Array.isArray(data) ? data : data?.items ?? [];
-      setSpaces(list);
-    } catch (e) {
-      if (!signal?.aborted) setError(e?.message || "Impossible de charger les espaces.");
-    } finally {
-      if (!signal?.aborted) setPending(false);
-      inflightRef.current = false;
-    }
-  }, [isLogged, authHeaders]);
+  const load = useCallback(
+    async (signal) => {
+      if (!isLogged || inflightRef.current) return;
+      inflightRef.current = true;
+      setPending(true);
+      setError(null);
+      try {
+        const data = await json("/api/space/all", {
+          headers: { ...authHeaders },
+          signal,
+        });
+        if (signal?.aborted) return;
+        const list = Array.isArray(data) ? data : data?.items ?? [];
+        setSpaces(list);
+      } catch (e) {
+        if (!signal?.aborted) setError(e?.message || "Impossible de charger les espaces.");
+      } finally {
+        if (!signal?.aborted) setPending(false);
+        inflightRef.current = false;
+      }
+    },
+    [isLogged, authHeaders]
+  );
 
-  // ⚠️ Un SEUL hook : charge à chaque focus, sans doublons ni clignote
+  // ⚠️ Un SEUL hook : charge à chaque focus
   useFocusEffect(
     useCallback(() => {
       const controller = new AbortController();
@@ -72,8 +103,15 @@ export default function SpacesScreen() {
     );
   }
 
+  const detectRole = (it) => {
+    if (it?.role) return it.role;
+    // fallback minimal : owner si je suis le créateur, sinon membre
+    const mine = String(it?.created_by?.id || "") === String(user?.id || "");
+    return mine ? "owner" : "member";
+  };
+
   return (
-    <RoleGuard anyOf={["ROLE_USER","ROLE_ADMIN"]}>
+    <RoleGuard anyOf={["ROLE_USER", "ROLE_ADMIN"]}>
       <Layout scroll={false} header={<AppHeader />} footer={<AppFooter />} style={{ backgroundColor: "#000" }}>
         <View style={styles.container}>
           {/* Tabs */}
@@ -120,29 +158,41 @@ export default function SpacesScreen() {
                 </View>
               )
             }
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.card}
-                onPress={() => navigation.navigate("SpaceDetails", { id: item.id })}
-              >
-                <View style={styles.logoCircle}>
-                  <Text style={styles.logoLetter}>
-                    {(item.name || "?").charAt(0).toUpperCase()}
-                  </Text>
-                </View>
+            renderItem={({ item }) => {
+              const role = detectRole(item);
+              const visIcon = item.visibility === "public" ? "globe-outline" : "lock-closed-outline";
 
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cardTitle}>{item.name || "Espace"}</Text>
-                  <Text style={styles.cardSub}>
-                    {item.members_count != null
-                      ? `${item.members_count} membre(s)`
-                      : item.description || "—"}
-                  </Text>
-                </View>
+              return (
+                <TouchableOpacity
+                  style={styles.card}
+                  onPress={() => navigation.navigate("SpaceDetails", { id: item.id })}
+                >
+                  <View style={styles.logoCircle}>
+                    <Text style={styles.logoLetter}>{(item.name || "?").charAt(0).toUpperCase()}</Text>
+                  </View>
 
-                <Ionicons name="chevron-forward" size={18} color="#aaa" />
-              </TouchableOpacity>
-            )}
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center" }}>
+                      <Text style={[styles.cardTitle, { flex: 1 }]} numberOfLines={1}>
+                        {item.name || "Espace"}
+                      </Text>
+                      <RoleBadge role={role} />
+                    </View>
+
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <Ionicons name={visIcon} size={12} color="#9aa0a6" />
+                      <Text style={[styles.cardSub, { flexShrink: 1 }]} numberOfLines={1}>
+                        {item.members_count != null
+                          ? `${item.members_count} membre(s)`
+                          : item.description || "—"}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Ionicons name="chevron-forward" size={18} color="#aaa" />
+                </TouchableOpacity>
+              );
+            }}
             contentContainerStyle={{ paddingBottom: 20 }}
           />
         </View>

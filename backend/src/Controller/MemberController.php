@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Entity\Invitation;
+use App\Service\Notifier;
 use App\Entity\Member;
 use App\Entity\Space;
 use App\Repository\InvitationRepository;
@@ -26,250 +27,261 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 class MemberController extends AbstractController
 {
     #[Route('/create', name: 'create_member', methods: ['POST'])]
-    public function create(
-        Request $req,
-        SpaceRepository $spaces,
-        UserRepository $users,
-        MemberRepository $members,
-        InvitationRepository $invRepo,
-        EntityManagerInterface $em
-    ): JsonResponse {
-        $this->denyAccessUnlessGranted('IS_AUTHENTICATED_FULLY');
+public function create(
+    Request $req,
+    SpaceRepository $spaces,
+    UserRepository $users,
+    MemberRepository $members,
+    InvitationRepository $invRepo,
+    EntityManagerInterface $em,
+    Notifier $notifier                           // ⬅️ AJOUT
+): JsonResponse {
+    $this->denyAccessUnlessGranted('IS_AUTHENTICATED_FULLY');
 
-        $payload      = json_decode($req->getContent(), true) ?: [];
-        $spaceUuid    = (string)($payload['space_id'] ?? '');
-        $relationship = (string)($payload['relationship'] ?? 'friend');
-        $dobStr       = $payload['date_of_birth'] ?? null;
-        $userId       = $payload['user_id'] ?? null;   // string/uuid/int selon ton User
-        $email        = $payload['email'] ?? null;
+    $payload      = json_decode($req->getContent(), true) ?: [];
+    $spaceUuid    = (string)($payload['space_id'] ?? '');
+    $relationship = (string)($payload['relationship'] ?? 'friend');
+    $dobStr       = $payload['date_of_birth'] ?? null;
+    $userId       = $payload['user_id'] ?? null;
+    $email        = $payload['email'] ?? null;
 
-        if ($spaceUuid === '' || $relationship === '') {
-            return $this->json(['error' => 'space_id et relationship requis'], 400);
+    if ($spaceUuid === '' || $relationship === '') {
+        return $this->json(['error' => 'space_id et relationship requis'], 400);
+    }
+
+    $space = $spaces->find($spaceUuid);
+    if (!$space) return $this->json(['error' => 'Espace introuvable'], 404);
+
+    $me = $this->getUser();
+    $isOwner = $space->getCreatedBy() && $space->getCreatedBy()->getId() === $me->getId();
+    $isAdmin = \in_array('ROLE_ADMIN', $me->getRoles(), true);
+    if (!$isOwner && !$isAdmin) return $this->json(['error' => 'Accès refusé'], 403);
+
+    $dob = null;
+    if ($dobStr) { try { $dob = new \DateTimeImmutable($dobStr); } catch (\Throwable $e) {} }
+
+    // 1) Attacher un user existant (par id ou email)
+    $user = null;
+    if ($userId) {
+        $user = $users->find($userId);
+    } elseif ($email) {
+        $user = $users->findOneBy(['email' => strtolower(trim($email))]);
+    }
+
+    if ($user) {
+        // éviter doublon
+        if ($already = $members->findOneBy(['space' => $space, 'user' => $user])) {
+            return $this->json([
+                'status' => 'added',
+                'member' => [
+                    'id' => $already->getId(),
+                    'name' => (method_exists($user, 'getName') && $user->getName()) ? $user->getName() : $user->getEmail(),
+                    'relationship' => $already->getRelationship(),
+                    'date_of_birth' => $already->getDateOfBirth()?->format('Y-m-d'),
+                    'user_id' => $user->getId(),
+                ]
+            ]);
         }
 
-        // PK = UUID
-        $space = $spaces->find($spaceUuid);
-        if (!$space) return $this->json(['error' => 'Espace introuvable'], 404);
-
-        $me = $this->getUser();
-        $isOwner = $space->getCreatedBy() && $space->getCreatedBy()->getId() === $me->getId();
-        $isAdmin = \in_array('ROLE_ADMIN', $me->getRoles(), true);
-        if (!$isOwner && !$isAdmin) return $this->json(['error' => 'Accès refusé'], 403);
-
-        $dob = null;
-        if ($dobStr) { try { $dob = new \DateTimeImmutable($dobStr); } catch (\Throwable $e) {} }
-
-        // 1) Attacher un user existant (par id ou email)
-        $user = null;
-        if ($userId) {
-            $user = $users->find($userId); // surtout pas de (int) ici
-        } elseif ($email) {
-            $user = $users->findOneBy(['email' => strtolower(trim($email))]);
+        // displayName sûr
+        $displayName = trim((string)($payload['name'] ?? ''));
+        if ($displayName === '') {
+            if (method_exists($user, 'getName') && $user->getName()) {
+                $displayName = $user->getName();
+            } elseif (
+                (method_exists($user, 'getFirstname') && $user->getFirstname()) ||
+                (method_exists($user, 'getLastname') && $user->getLastname())
+            ) {
+                $fn = method_exists($user, 'getFirstname') ? ($user->getFirstname() ?? '') : '';
+                $ln = method_exists($user, 'getLastname')  ? ($user->getLastname()  ?? '') : '';
+                $displayName = trim($fn.' '.$ln);
+            } elseif (method_exists($user, 'getEmail')) {
+                $displayName = $user->getEmail();
+            } else {
+                $displayName = 'Membre';
+            }
         }
 
-        if ($user) {
-    // éviter doublon
-    $already = $members->findOneBy(['space' => $space, 'user' => $user]);
-    if ($already) {
+        $m = (new Member())
+            ->setSpace($space)
+            ->setUser($user)
+            ->setName($displayName)
+            ->setRelationship($relationship)
+            ->setDateOfBirth($dob);
+
+        $em->persist($m);
+
+        // ✅ s’il existe une invitation “pending” pour ce mail → la marquer acceptée
+        try {
+            $pending = $invRepo->findOnePendingBySpaceAndEmail($space, strtolower($user->getEmail()));
+        } catch (\TypeError $e) {
+            $pending = $invRepo->findOnePendingBySpaceAndEmail($space->getId(), strtolower($user->getEmail()));
+        }
+        if ($pending && method_exists($pending, 'setStatus')) {
+            $pending->setStatus(Invitation::STATUS_ACCEPTED);
+        }
+
+        $em->flush();
+
+        // ✅ NOTIF au membre ajouté
+        $notifier->memberAdded($user, $space, $me);
+
         return $this->json([
             'status' => 'added',
             'member' => [
-                'id' => $already->getId(),
-                'name' => (method_exists($user, 'getName') && $user->getName()) ? $user->getName() : $user->getEmail(),
-                'relationship' => $already->getRelationship(),
-                'date_of_birth' => $already->getDateOfBirth()?->format('Y-m-d'),
+                'id' => $m->getId(),
+                'name' => $m->getName(),
+                'relationship' => $m->getRelationship(),
+                'date_of_birth' => $m->getDateOfBirth()?->format('Y-m-d'),
                 'user_id' => $user->getId(),
             ]
         ]);
     }
 
-    // === NEW: déterminer un nom d’affichage non-null ===
-    $displayName = trim((string)($payload['name'] ?? ''));
-    if ($displayName === '') {
-        if (method_exists($user, 'getName') && $user->getName()) {
-            $displayName = $user->getName();
-        } elseif (
-            (method_exists($user, 'getFirstname') && $user->getFirstname()) ||
-            (method_exists($user, 'getLastname') && $user->getLastname())
-        ) {
-            $fn = method_exists($user, 'getFirstname') ? ($user->getFirstname() ?? '') : '';
-            $ln = method_exists($user, 'getLastname')  ? ($user->getLastname()  ?? '') : '';
-            $displayName = trim($fn.' '.$ln);
-        } elseif (method_exists($user, 'getEmail')) {
-            $displayName = $user->getEmail();
-        } else {
-            $displayName = 'Membre';
+    // 2) Sinon : créer/retourner une invitation
+    if (!$email) return $this->json(['error' => 'email requis pour invitation'], 400);
+    $email = strtolower(trim($email));
+
+    // l’email vient de s’enregistrer ?
+    if ($existingUser = $users->findOneBy(['email' => $email])) {
+        // (même logique que plus haut)
+        $displayName = trim((string)($payload['name'] ?? '')) ?: ($existingUser->getName()
+            ?? trim(($existingUser->getFirstname() ?? '').' '.($existingUser->getLastname() ?? ''))
+            ?: $existingUser->getEmail());
+
+        $m = (new Member())
+            ->setSpace($space)
+            ->setUser($existingUser)
+            ->setName($displayName)
+            ->setRelationship($relationship)
+            ->setDateOfBirth($dob);
+
+        $em->persist($m);
+
+        // fermer une pending éventuelle
+        try {
+            $pending = $invRepo->findOnePendingBySpaceAndEmail($space, $email);
+        } catch (\TypeError $e) {
+            $pending = $invRepo->findOnePendingBySpaceAndEmail($space->getId(), $email);
         }
+        if ($pending && method_exists($pending, 'setStatus')) {
+            $pending->setStatus(Invitation::STATUS_ACCEPTED);
+        }
+
+        $em->flush();
+
+        // ✅ NOTIF au membre ajouté
+        $notifier->memberAdded($existingUser, $space, $me);
+
+        return $this->json([
+            'status' => 'added',
+            'member' => [
+                'id' => $m->getId(),
+                'name' => $m->getName(),
+                'relationship' => $m->getRelationship(),
+                'date_of_birth' => $m->getDateOfBirth()?->format('Y-m-d'),
+                'user_id' => $existingUser->getId(),
+            ]
+        ]);
     }
 
-    $m = new Member();
-    $m->setSpace($space);
-    $m->setUser($user);
-    $m->setName($displayName);                  // 👈 OBLIGATOIRE pour NOT NULL
-    $m->setRelationship($relationship);
-    $m->setDateOfBirth($dob);
-    $em->persist($m);
+    // pending existante ?
+    try {
+        $pending = $invRepo->findOnePendingBySpaceAndEmail($space, $email);
+    } catch (\TypeError $e) {
+        $pending = $invRepo->findOnePendingBySpaceAndEmail($space->getId(), $email);
+    }
+    if ($pending) {
+        return $this->json([
+            'status' => 'invited',
+            'invite' => [
+                'id' => $pending->getId(),
+                'email' => $pending->getEmail(),
+                'relationship' => $pending->getRelationship(),
+                'expires_at' => $pending->getExpiresAt()?->format('Y-m-d'),
+                'token' => $pending->getToken(),
+            ]
+        ]);
+    }
+
+    // créer l’invitation
+    $inv = (new Invitation())
+        ->setSpace($space)
+        ->setEmail($email)
+        ->setInvitedBy($me)
+        ->setRelationship($relationship)
+        ->setDateOfBirth($dob)
+        ->setExpiresAt((new \DateTimeImmutable())->modify('+14 days'));
+
+    $em->persist($inv);
     $em->flush();
 
+    // (facultatif) notifier l’owner que l’invite est partie
+    $notifier->inviteSent($me, $space, $email, $me);
+
     return $this->json([
-        'status' => 'added',
-        'member' => [
-            'id' => $m->getId(),
-            'name' => $m->getName(),
-            'relationship' => $m->getRelationship(),
-            'date_of_birth' => $m->getDateOfBirth()?->format('Y-m-d'),
-            'user_id' => $user->getId(),
+        'status' => 'invited',
+        'invite' => [
+            'id' => $inv->getId(),
+            'email' => $inv->getEmail(),
+            'relationship' => $inv->getRelationship(),
+            'expires_at' => $inv->getExpiresAt()?->format('Y-m-d'),
+            'token' => $inv->getToken(),
         ]
     ]);
 }
 
 
-        // 2) Sinon : créer/retourner une invitation
-        if (!$email) return $this->json(['error' => 'email requis pour invitation'], 400);
-        $email = strtolower(trim($email));
+    #[Route('/all', name: 'get_all_spaces', methods: ['GET'])]
+    #[IsGranted('IS_AUTHENTICATED_FULLY')]
+    public function getAllSpaces(EntityManagerInterface $em): JsonResponse
+    {
+        $me = $this->getUser();
 
-        // si l'email s'est enregistré entre-temps
-        if ($existingUser = $users->findOneBy(['email' => $email])) {
-    // === NEW: déterminer un nom d’affichage non-null ===
-    $displayName = trim((string)($payload['name'] ?? ''));
-    if ($displayName === '') {
-        if (method_exists($existingUser, 'getName') && $existingUser->getName()) {
-            $displayName = $existingUser->getName();
-        } elseif (
-            (method_exists($existingUser, 'getFirstname') && $existingUser->getFirstname()) ||
-            (method_exists($existingUser, 'getLastname') && $existingUser->getLastname())
-        ) {
-            $fn = method_exists($existingUser, 'getFirstname') ? ($existingUser->getFirstname() ?? '') : '';
-            $ln = method_exists($existingUser, 'getLastname')  ? ($existingUser->getLastname()  ?? '') : '';
-            $displayName = trim($fn.' '.$ln);
-        } elseif (method_exists($existingUser, 'getEmail')) {
-            $displayName = $existingUser->getEmail();
-        } else {
-            $displayName = 'Membre';
-        }
-    }
+        $qb = $em->getRepository(Space::class)->createQueryBuilder('s')
+            ->leftJoin('s.createdBy', 'cb')->addSelect('cb');
 
-            $m = new Member();
-            $m->setSpace($space);
-            $m->setUser($existingUser);
-            $m->setName($displayName);                 // 👈 OBLIGATOIRE pour NOT NULL
-            $m->setRelationship($relationship);
-            $m->setDateOfBirth($dob);
-            $em->persist($m);
-            $em->flush();
-
-            return $this->json([
-                'status' => 'added',
-                'member' => [
-                    'id' => $m->getId(),
-                    'name' => $m->getName(),
-                    'relationship' => $m->getRelationship(),
-                    'date_of_birth' => $m->getDateOfBirth()?->format('Y-m-d'),
-                    'user_id' => $existingUser->getId(),
-                ]
-            ]);
-        }
-
-
-        // pending existante (appel par entité Space en priorité)
-        $pending = null;
-        try {
-            $pending = $invRepo->findOnePendingBySpaceAndEmail($space, $email);
-        } catch (\TypeError $e) {
-            // si ton repo est (string $spaceId, string $email)
-            $pending = $invRepo->findOnePendingBySpaceAndEmail($space->getId(), $email);
-        }
-
-        if ($pending) {
-            return $this->json([
-                'status' => 'invited',
-                'invite' => [
-                    'id' => $pending->getId(),
-                    'email' => $pending->getEmail(),
-                    'relationship' => $pending->getRelationship(),
-                    'expires_at' => $pending->getExpiresAt()?->format('Y-m-d'),
-                    'token' => $pending->getToken(),
-                ]
-            ]);
-        }
-
-        $inv = (new Invitation())
-            ->setSpace($space)
-            ->setEmail($email)
-            ->setInvitedBy($me)
-            ->setRelationship($relationship)
-            ->setDateOfBirth($dob)
-            ->setExpiresAt((new \DateTimeImmutable())->modify('+14 days'));
-
-        $em->persist($inv);
-        $em->flush();
-
-        return $this->json([
-            'status' => 'invited',
-            'invite' => [
-                'id' => $inv->getId(),
-                'email' => $inv->getEmail(),
-                'relationship' => $inv->getRelationship(),
-                'expires_at' => $inv->getExpiresAt()?->format('Y-m-d'),
-                'token' => $inv->getToken(),
-            ]
-        ]);
-    }
-
-    #[Route('/all', name: 'get_all_members', methods: ['GET'])]
-#[IsGranted('IS_AUTHENTICATED_FULLY')]
-public function getAllMembers(Request $request, MemberRepository $memberRepository, SpaceRepository $spaces): JsonResponse
-{
-    $me = $this->getUser();
-    $spaceUuid = (string)($request->query->get('space_id') ?? '');
-
-    if ($spaceUuid !== '') {
-        $space = $spaces->find($spaceUuid);
-        if (!$space) return $this->json(['error' => 'Espace introuvable'], 404);
-
-        // autorisé si admin, owner de l’espace, ou membre de l’espace
+        // ⚠️ pas de addSelect('m')/addSelect('mu') pour éviter DISTINCT sur json
         if (!$this->isGranted('ROLE_ADMIN')) {
-            $isOwner = $space->getCreatedBy()?->getId() === $me->getId();
-            $isMember = (bool)$memberRepository->createQueryBuilder('mm')
-                ->select('COUNT(mm.id)')
-                ->andWhere('mm.space = :s')->andWhere('mm.user = :u')
-                ->setParameter('s', $space)->setParameter('u', $me)
-                ->getQuery()->getSingleScalarResult();
+            // Filtrer via un EXISTS plutôt que joindre mu.*
+            $qb->andWhere('cb = :me OR EXISTS (
+                SELECT 1 FROM App\Entity\Member mm
+                WHERE mm.space = s AND mm.user = :me
+            )')->setParameter('me', $me);
+        }
 
-            if (!$isOwner && !$isMember) {
-                return $this->json(['error' => 'Forbidden'], 403);
+        $spaces = $qb->getQuery()->getResult();
+
+        $data = array_map(function (Space $space) use ($me) {
+            // Déterminer le "rôle" de l’utilisateur sur chaque space
+            $role = 'viewer';
+            if ($space->getCreatedBy()?->getId() === $me->getId()) {
+                $role = 'owner';
+            } else {
+                foreach ($space->getMembers() as $mm) {
+                    if ($mm->getUser()?->getId() === $me->getId()) { $role = 'member'; break; }
+                }
             }
-        }
 
-        $members = $memberRepository->createQueryBuilder('m')
-            ->andWhere('m.space = :space')->setParameter('space', $space)
-            ->orderBy('m.id', 'ASC')
-            ->getQuery()->getResult();
-    } else {
-        // sans espace : admin → tous ; sinon → seulement mes “Member” (m.user = me)
-        if ($this->isGranted('ROLE_ADMIN')) {
-            $members = $memberRepository->findBy([], ['id' => 'ASC']);
-        } else {
-            $members = $memberRepository->createQueryBuilder('m')
-                ->leftJoin('m.user', 'u')->addSelect('u')
-                ->andWhere('u = :me')->setParameter('me', $me)
-                ->orderBy('m.id', 'ASC')
-                ->getQuery()->getResult();
-        }
+            return [
+                'id'          => $space->getId(),
+                'name'        => $space->getName(),
+                'visibility'  => $space->getVisibility(),
+                'description' => $space->getDescription(),
+                'logo'        => $space->getLogo(),
+                'created_at'  => $space->getCreatedAt()?->format('Y-m-d\TH:i:sP'),
+                'created_by'  => [
+                    'id'        => $space->getCreatedBy()?->getId(),
+                    'email'     => $space->getCreatedBy()?->getEmail(),
+                    'full_name' => $space->getCreatedBy()?->getFullName(),
+                ],
+                'role'        => $role, // ← utile pour le badge “Propriétaire / Membre”
+            ];
+        }, $spaces);
+
+        return $this->json($data);
     }
 
-    $response = array_map(fn(Member $m) => [
-        'id'            => $m->getId(),
-        'name'          => $m->getName(),
-        'relationship'  => $m->getRelationship(),
-        'date_of_birth' => $m->getDateOfBirth()?->format('Y-m-d'),
-        'space_id'      => $m->getSpace()->getId(),
-        'space_name'    => $m->getSpace()->getName(),
-        'user_id'       => $m->getUser()?->getId(),
-    ], $members);
-
-    return $this->json($response, Response::HTTP_OK);
-}
 
 
     #[Route('/{id}', name: 'get_member_by_id', methods: ['GET'], requirements: ['id' => '[0-9a-fA-F-]{36}'])]
