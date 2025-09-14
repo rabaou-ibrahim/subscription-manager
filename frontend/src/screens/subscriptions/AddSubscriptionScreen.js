@@ -67,6 +67,9 @@ const parseYMD = (s) => {
 
 export default function AddSubscriptionScreen() {
   const route = useRoute();
+  const mode = route.params?.mode || "create";
+  const editingId = route.params?.id || null;
+  const snapshot = route.params?.snapshot || null;
   const navigation = useNavigation();
   const { token, user } = useAuth();
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
@@ -132,8 +135,26 @@ export default function AddSubscriptionScreen() {
   const [showStatusModal, setShowStatusModal] = useState(false);
 
   useEffect(() => {
-    navigation.setOptions?.({ title: "Nouvel abonnement" });
-  }, [navigation]);
+    navigation.setOptions?.({ title: mode === "edit" ? "Modifier l’abonnement" : "Nouvel abonnement" });
+  }, [navigation, mode]);
+
+  // Préremplir depuis snapshot si on édite
+  useEffect(() => {
+    if (mode !== "edit" || !snapshot) return;
+    setServiceId(snapshot.service_id ?? snapshot.service?.id ?? null);
+    setName(snapshot.name ?? "");
+    setNotes(snapshot.notes ?? "");
+    setAmount(String(snapshot.amount ?? ""));
+    setCurrency(snapshot.currency ?? "EUR");
+    setCycle(snapshot.billing_frequency ?? "monthly");
+    setStartDate(snapshot.start_date ?? fmtDate(new Date()));
+    setEndDate(snapshot.end_date ?? "");
+    setBillingMode(snapshot.billing_mode ?? "unknown");
+    setAutoRenewal(!!snapshot.auto_renewal);
+    setStatus(snapshot.status ?? "active");
+    setMemberId(snapshot.member_id ?? memberId);
+    setSpaceId(snapshot.space_id ?? spaceId);
+  }, [mode, snapshot]);
 
   // résolution auto du memberId s’il n’est pas fourni
   useEffect(() => {
@@ -187,8 +208,8 @@ export default function AddSubscriptionScreen() {
   }, [services]);
   const selectedService = serviceItems.find(x => x.value === serviceId);
 
-  const startISO = Platform.OS === "web" ? (frToISO(startDateFR) || "") : startDate;
-const endISO   = Platform.OS === "web" ? (endDateFR ? frToISO(endDateFR) : "") : endDate;
+  const startISO = startDate || "";
+  const endISO   = endDate || "";
 
 const validate = () => {
   if (!serviceId) return "Choisis un service.";
@@ -202,7 +223,7 @@ const validate = () => {
   };
 
 
-  const handleCreate = async () => {
+  const handleSubmit = async () => {
     const err = validate();
     if (err) return Alert.alert("Validation", err);
 
@@ -223,21 +244,30 @@ const validate = () => {
     };
 
     try {
-      const data = await json("/api/subscription/create", {
-        method: "POST",
+      const url = mode === "edit" && editingId
+        ? `/api/subscription/update/${editingId}`
+        : "/api/subscription/create";
+      const method = mode === "edit" ? "PUT" : "POST";
+      const data = await json(url, {
+        method,
         headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify(payload),
       });
 
-      Alert.alert("Succès", "Abonnement créé.");
-      const newId = data?.id || data?.subscription?.id;
+      Alert.alert("Succès", mode === "edit" ? "Abonnement mis à jour." : "Abonnement créé.");
+      const newId = editingId || data?.id || data?.subscription?.id;
       if (newId) {
-        navigation.navigate("SubscriptionDetails", { id: newId, refreshAt: Date.now() });
+        const updatedSnapshot = { ...(snapshot || {}), ...payload, id: newId };
+        navigation.replace("SubscriptionDetails", {
+        id: newId,
+        subscription: updatedSnapshot,   // on passe les valeurs à jour
+        refreshAt: Date.now(),
+     });
       } else if (navigation.canGoBack()) {
         navigation.goBack();
       }
     } catch (e) {
-      Alert.alert("Erreur", e?.message || "Création impossible");
+      Alert.alert("Erreur", e?.message || (mode === "edit" ? "Mise à jour impossible" : "Création impossible"));
     }
   };
 
@@ -400,8 +430,8 @@ const validate = () => {
               </View>
             </ScrollView>
 
-            <TouchableOpacity style={styles.button} onPress={handleCreate}>
-              <Text style={styles.buttonText}>Créer</Text>
+            <TouchableOpacity style={styles.button} onPress={handleSubmit}>
+              <Text style={styles.buttonText}>{mode === "edit" ? "Enregistrer" : "Créer"}</Text>
             </TouchableOpacity>
           </KeyboardAvoidingView>
 

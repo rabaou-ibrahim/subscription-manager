@@ -301,7 +301,62 @@ class SubscriptionController extends AbstractController
 
         $data = json_decode($request->getContent(), true) ?? [];
 
-        // ... (autres champs)
+        // -- helpers
+        $toDate = function (?string $s): ?\DateTimeImmutable {
+            if (!$s) return null;
+            $dt = \DateTimeImmutable::createFromFormat('Y-m-d', $s);
+            return $dt ?: null;
+        };
+        $toBool = fn($v) => filter_var($v, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? (bool)$v;
+
+        // -- mapping champ par champ (on met à jour seulement si la clé est présente)
+        if (array_key_exists('name', $data)) {
+            $sub->setName(trim((string)$data['name']));
+        }
+        if (array_key_exists('notes', $data)) {
+            $notes = $data['notes'];
+            $sub->setNotes($notes === '' ? null : $notes);
+        }
+        if (array_key_exists('amount', $data)) {
+            // normalise en "xx.yy"
+            $sub->setAmount(number_format((float)$data['amount'], 2, '.', ''));
+        }
+        if (array_key_exists('currency', $data)) {
+            $sub->setCurrency($data['currency']);
+        }
+        if (array_key_exists('billing_frequency', $data)) {
+            // 'monthly' | 'yearly' | 'weekly' | 'daily'
+            $sub->setBillingFrequency($data['billing_frequency']);
+        }
+        if (array_key_exists('subscription_type', $data)) {
+            $sub->setSubscriptionType($data['subscription_type']);
+        }
+        if (array_key_exists('start_date', $data)) {
+            $sub->setStartDate($toDate($data['start_date']));
+        }
+        if (array_key_exists('end_date', $data)) {
+            $sub->setEndDate($toDate($data['end_date']));
+        }
+        if (array_key_exists('billing_mode', $data)) {
+            $sub->setBillingMode($data['billing_mode']); // 'cash', 'paypal', ...
+        }
+        if (array_key_exists('auto_renewal', $data)) {
+            $sub->setAutoRenewal($toBool($data['auto_renewal']));
+        }
+        if (array_key_exists('status', $data)) {
+            // 'active' | 'inactive' | ...
+            $sub->setStatus($data['status']);
+        }
+        if (array_key_exists('service_id', $data)) {
+            if ($data['service_id']) {
+                $svc = $em->getRepository(\App\Entity\Service::class)->find($data['service_id']);
+                if (!$svc) return $this->json(['error' => 'Service not found'], 400);
+                $sub->setService($svc);
+            } else {
+                $sub->setService(null);
+            }
+        }
+
 
         if (array_key_exists('member_id', $data)) {
             if ($data['member_id']) {
