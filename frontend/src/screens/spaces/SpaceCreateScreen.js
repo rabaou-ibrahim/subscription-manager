@@ -15,6 +15,14 @@ import { json } from "../../services/http";
 import styles from "../../styles/SpaceCreateStyles";
 import RoleGuard from "../../guards/RoleGuard";
 
+const VIS_OPTIONS = [
+  { key: "private", label: "Privé" },
+  { key: "public",  label: "Public" },
+];
+const visLabel = (v) => (v === "public" ? "Public" : "Privé");
+const toVisKey = (label) => (VIS_OPTIONS.find(o => o.label === label)?.key ?? "private");
+
+
 export default function SpaceCreateScreen() {
   const navigation = useNavigation();
   const { token } = useAuth();
@@ -56,7 +64,7 @@ export default function SpaceCreateScreen() {
       const spaceId = spaceObj?.id;
       if (!spaceId) throw new Error("ID de l'espace introuvable après création.");
 
-      // 2) Me créer comme membre (owner/self) — IMPORTANT: passer user_id
+      // 2) Me créer comme membre (owner/self)
       try {
         const me = await json("/api/user/me", { headers: { ...authHeaders } });
         const displayName =
@@ -70,7 +78,7 @@ export default function SpaceCreateScreen() {
             space_id: String(spaceId),
             relationship: "self",
             name: displayName,
-            user_id: me?.id,          // 👈 évite la branche “invitation”
+            user_id: me?.id,
           }),
         });
       } catch (e) {
@@ -132,20 +140,24 @@ export default function SpaceCreateScreen() {
             style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}
             onPress={() => setShowVis(true)}
           >
-            <Text style={{ color: "#fff" }}>{visibility === "public" ? "Public" : "Privé"}</Text>
+            <Text style={{ color: "#fff" }}>{visLabel(visibility)}</Text>
             <Text style={{ color: "#A6FF00", fontWeight: "700" }}>Choisir</Text>
           </TouchableOpacity>
 
           <ModalSelect
             visible={showVis}
             title="Visibilité"
-            options={["private", "public"]}
-            value={visibility}
-            onChange={(v) => { setVisibility(v); setShowVis(false); }}
+            options={VIS_OPTIONS.map(o => o.label)}             // ⬅️ strings seulement
+            value={visLabel(visibility)}                        // ⬅️ label actuel
+            onChange={(label) => {                              // ⬅️ map label -> key
+              setVisibility(toVisKey(label));
+              setShowVis(false);
+            }}
             onClose={() => setShowVis(false)}
             compact
             columns={2}
           />
+
 
           {/* Actions */}
           <View style={{ marginTop: 18, gap: 10 }}>

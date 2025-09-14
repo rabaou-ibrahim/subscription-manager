@@ -25,6 +25,8 @@ import SpaceDetailsScreen from "../screens/spaces/SpaceDetailsScreen";
 
 import ProfileScreen from "../screens/profile/ProfileScreen";
 
+import MyInvitationsScreen from "../screens/invitations/MyInvitationsScreen";
+
 import NotificationsScreen from "../screens/notifications/NotificationsScreen";
 
 import PaymentScreen from "../screens/payments/PaymentScreen";
@@ -79,25 +81,26 @@ export default function AppNavigator() {
         <Stack.Navigator screenOptions={{ headerShown:false, animation:"fade" }}>
           <Stack.Screen name="Home" component={HomeScreen} />
           <Stack.Screen name="Dashboard" component={DashboardScreen} />
-          <Stack.Screen name="Profile" component={ProfileScreen} />
-          <Stack.Screen name="ActiveSubscription" component={ActiveSubscriptionScreen} />
-          <Stack.Screen name="SubscriptionList" component={SubscriptionListScreen} />
-          <Stack.Screen name="SubscriptionDetails" component={SubscriptionDetailsScreen} />
+          <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: "Mon Profil" }} />
+          <Stack.Screen name="ActiveSubscription" component={ActiveSubscriptionScreen} options={{ title: "Mon Abonnement Actif" }} />
+          <Stack.Screen name="SubscriptionList" component={SubscriptionListScreen} options={{ title: "Mes Abonnements" }} />
+          <Stack.Screen name="SubscriptionDetails" component={SubscriptionDetailsScreen} options={{ title: "Détails de l'Abonnement" }} />
           <Stack.Screen name="SubscriptionItem" component={SubscriptionItem} />
-          <Stack.Screen name="SpaceCreate" component={SpaceCreateScreen} />
-          <Stack.Screen name="SpaceDetails" component={SpaceDetailsScreen} />
-          <Stack.Screen name="SpacesScreen" component={SpacesScreen} />
-          <Stack.Screen name="AddSubscription" component={AddSubscriptionScreen} />
+          <Stack.Screen name="SpaceCreate" component={SpaceCreateScreen} options={{ title: "Créer un Espace" }} />
+          <Stack.Screen name="SpaceDetails" component={SpaceDetailsScreen} options={{ title: "Détails de l'Espace" }} />
+          <Stack.Screen name="SpacesScreen" component={SpacesScreen} options={{ title: "Mes Espaces" }} />
+          <Stack.Screen name="AddSubscription" component={AddSubscriptionScreen} options={{ title: "Ajouter un Abonnement" }} />
           <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: "Notifications" }} />
           <Stack.Screen name="CategoriesAdmin" component={CategoriesAdminScreen} options={{ title: "Catégories (admin)" }} />
           <Stack.Screen name="ServicesAdmin" component={ServicesAdminScreen} options={{ title: "Services (admin)" }} />
           <Stack.Screen name="Payment" component={PaymentScreen} options={{ title: "Paiement" }} />
+          <Stack.Screen name="MyInvitations" component={MyInvitationsScreen} options={{ title: "Mes invitations" }} />
         </Stack.Navigator>
       ) : (
         <Stack.Navigator screenOptions={{ headerShown:false, animation:"fade" }}>
           <Stack.Screen name="Home" component={HomeScreen} />
-          <Stack.Screen name="Login" component={LoginScreen} />
-          <Stack.Screen name="Register" component={RegisterScreen} />
+          <Stack.Screen name="Login" component={LoginScreen} options={{ title: "Se connecter" }} />
+          <Stack.Screen name="Register" component={RegisterScreen} options={{ title: "S'inscrire" }} />
         </Stack.Navigator>
       )}
     </NavigationContainer>

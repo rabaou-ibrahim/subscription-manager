@@ -15,6 +15,45 @@ import useAuth from "../../hooks/useAuth";
 import { json } from "../../services/http";
 import styles from "../../styles/SpaceDetailsStyles";
 import RoleGuard from "../../guards/RoleGuard";
+import ModalSelect from "../../ui/ModalSelect";
+
+const REL_OPTIONS = [
+  { key: "friend",  label: "Ami(e)" },
+  { key: "parent",  label: "Parent" },
+  { key: "child",   label: "Enfant" },
+  { key: "partner", label: "Partenaire" },
+  { key: "other",   label: "Autre" },
+];
+const relLabel = (k) => REL_OPTIONS.find(o => o.key === k)?.label || k;
+const visLabel = (v) => (v === "public" ? "Public" : "Privé");
+
+const ROLE_META = {
+  owner:   { label: "Owner",  icon: "ribbon-outline",            bg: "#0ea5e9", fg: "#000" },
+  admin:   { label: "Admin",  icon: "shield-checkmark-outline",  bg: "#a78bfa", fg: "#000" },
+  member:  { label: "Membre", icon: "people-outline",            bg: "#34d399", fg: "#000" },
+  invited: { label: "Invité", icon: "mail-unread-outline",       bg: "#f59e0b", fg: "#000" },
+  restricted: { label: "Restreint", icon: "lock-closed-outline", bg: "#6b7280", fg: "#000" },
+};
+
+function RoleBadge({ role }) {
+  const r = ROLE_META[role] || ROLE_META.restricted;
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        backgroundColor: r.bg,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 999,
+      }}
+    >
+      <Ionicons name={r.icon} size={12} color={r.fg} />
+      <Text style={{ color: r.fg, fontWeight: "700", fontSize: 11 }}>{r.label}</Text>
+    </View>
+  );
+}
 
 export default function SpaceDetailsScreen() {
   const navigation = useNavigation();
@@ -33,50 +72,76 @@ export default function SpaceDetailsScreen() {
   const [members, setMembers] = useState([]);
   const [invites, setInvites] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  // modal ajout membre/invite
   const [showAdd, setShowAdd] = useState(false);
   const [emailInput, setEmailInput] = useState("");
-  const [relInput, setRelInput] = useState("friend");
+  const [relModal, setRelModal] = useState(false);
+  const [relKey, setRelKey] = useState("friend");
 
-  const canManage = useMemo(() => {
-    const isOwner = space?.created_by?.id && String(space.created_by.id) === String(myUserId);
-    const hasAdmin = Array.isArray(user?.roles) && user.roles.includes("ROLE_ADMIN");
-    return isOwner || hasAdmin;
-  }, [space, user, myUserId]);
+  const canManage =
+    !!(space?.permissions?.canManage) ||
+    (space?.created_by?.id && String(space.created_by.id) === String(myUserId)) ||
+    (Array.isArray(user?.roles) && user.roles.includes("ROLE_ADMIN"));
 
   // Barrière anti-double-load
   const inflightRef = useRef(false);
 
-  const load = useCallback(async (signal) => {
-    if (!spaceId || inflightRef.current) return;
-    inflightRef.current = true;
-    setLoading(true);
-    try {
-      const [s, m, i] = await Promise.all([
-        json(`/api/space/${spaceId}`, { headers: { ...authHeaders }, signal }),
-        json(`/api/member/all?space_id=${encodeURIComponent(spaceId)}`, { headers: { ...authHeaders }, signal }),
-        // member/invitations prioritaire, sinon invite/all fallback
-        json(`/api/member/invitations?space_id=${encodeURIComponent(spaceId)}`, { headers: { ...authHeaders }, signal })
-          .catch(() => json(`/api/invite/all?space_id=${encodeURIComponent(spaceId)}`, { headers: { ...authHeaders }, signal })),
-      ]);
-      if (signal?.aborted) return;
+  const load = useCallback(
+    async (signal) => {
+      if (!spaceId || inflightRef.current) return;
+      inflightRef.current = true;
+      setLoading(true);
+      try {
+        // 1) d’abord l’espace (contient role/permissions)
+        const s = await json(`/api/space/${spaceId}`, { headers: { ...authHeaders }, signal });
+        if (signal?.aborted) return;
+        setSpace(s);
 
-      setSpace(s);
-      setMembers(Array.isArray(m) ? m : m?.items ?? []);
-      setInvites(Array.isArray(i) ? i : i?.items ?? []);
-    } catch (e) {
-      if (!signal?.aborted) {
-        Alert.alert("Erreur", e?.message || "Espace introuvable.");
-        setSpace(null); setMembers([]); setInvites([]);
+        // 2) Ensuite seulement si autorisé
+        if (s?.permissions?.canViewMembers) {
+          const [mRes, iRes] = await Promise.allSettled([
+            json(`/api/member/all?space_id=${encodeURIComponent(spaceId)}`, { headers: { ...authHeaders }, signal }),
+            json(`/api/member/invitations?space_id=${encodeURIComponent(spaceId)}`, { headers: { ...authHeaders }, signal })
+              .catch(() => json(`/api/invite/all?space_id=${encodeURIComponent(spaceId)}`, { headers: { ...authHeaders }, signal })),
+          ]);
+          if (signal?.aborted) return;
+
+          setMembers(
+            mRes.status === "fulfilled" ? (Array.isArray(mRes.value) ? mRes.value : mRes.value.items ?? []) : []
+          );
+          setInvites(
+            iRes.status === "fulfilled" ? (Array.isArray(iRes.value) ? iRes.value : iRes.value.items ?? []) : []
+          );
+        } else {
+          setMembers([]);
+          setInvites([]);
+        }
+      } catch (e) {
+        if (e?.status === 403) {
+          // accès existant mais refusé → on affiche la page avec bandeau restreint
+          setSpace({
+            id: spaceId,
+            name: "Espace",
+            visibility: "private",
+            description: "",
+            permissions: { canManage: false, canViewMembers: false },
+            role: "restricted",
+          });
+          setMembers([]);
+          setInvites([]);
+        } else if (!signal?.aborted) {
+          Alert.alert("Erreur", e?.message || "Espace introuvable.");
+          setSpace(null);
+          setMembers([]);
+          setInvites([]);
+        }
+      } finally {
+        if (!signal?.aborted) setLoading(false);
+        inflightRef.current = false;
       }
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-      inflightRef.current = false;
-    }
-  }, [spaceId, authHeaders]);
+    },
+    [spaceId, authHeaders]
+  );
 
-  // ⚠️ Un SEUL hook, focus-only
   useFocusEffect(
     useCallback(() => {
       const controller = new AbortController();
@@ -98,15 +163,15 @@ export default function SpaceDetailsScreen() {
         body: JSON.stringify({
           space_id: String(spaceId),
           email,
-          relationship: relInput || "friend",
+          relationship: relKey || "friend",
         }),
       });
 
       if (res?.member) {
-        setMembers(prev => [res.member, ...prev]);
+        setMembers((prev) => [res.member, ...prev]);
         Alert.alert("OK", "Membre ajouté.");
       } else if (res?.invite) {
-        setInvites(prev => [res.invite, ...prev]);
+        setInvites((prev) => [res.invite, ...prev]);
         Alert.alert("OK", "Invitation envoyée.");
       } else {
         const c = new AbortController();
@@ -115,7 +180,7 @@ export default function SpaceDetailsScreen() {
 
       setShowAdd(false);
       setEmailInput("");
-      setRelInput("friend");
+      setRelKey("friend");
     } catch (e) {
       Alert.alert("Erreur", e?.message || "Action impossible.");
     }
@@ -124,26 +189,26 @@ export default function SpaceDetailsScreen() {
   const onResendInvite = async (inviteId) => {
     try {
       await json(`/api/member/invitation/resend/${inviteId}`, { method: "POST", headers: { ...authHeaders } });
-      Alert.alert("OK", "Invitation renvoyée.");
     } catch (e) {
       Alert.alert("Erreur", e?.message || "Impossible de renvoyer l’invitation.");
     }
   };
 
   const onCancelInvite = async (inviteId) => {
-    const confirm = Platform.OS === "web"
-      ? window.confirm("Annuler cette invitation ?")
-      : await new Promise(r => {
-          Alert.alert("Confirmer", "Annuler cette invitation ?", [
-            { text: "Non", style: "cancel", onPress: () => r(false) },
-            { text: "Oui", style: "destructive", onPress: () => r(true) },
-          ]);
-        });
+    const confirm =
+      Platform.OS === "web"
+        ? window.confirm("Annuler cette invitation ?")
+        : await new Promise((r) => {
+            Alert.alert("Confirmer", "Annuler cette invitation ?", [
+              { text: "Non", style: "cancel", onPress: () => r(false) },
+              { text: "Oui", style: "destructive", onPress: () => r(true) },
+            ]);
+          });
     if (!confirm) return;
 
     try {
       await json(`/api/member/invitation/cancel/${inviteId}`, { method: "POST", headers: { ...authHeaders } });
-      setInvites(prev => prev.filter(i => String(i.id) !== String(inviteId)));
+      setInvites((prev) => prev.filter((i) => String(i.id) !== String(inviteId)));
     } catch (e) {
       Alert.alert("Erreur", e?.message || "Annulation impossible.");
     }
@@ -162,12 +227,14 @@ export default function SpaceDetailsScreen() {
 
   if (!space) {
     return (
-      <RoleGuard anyOf={["ROLE_USER","ROLE_ADMIN"]}>
+      <RoleGuard anyOf={["ROLE_USER", "ROLE_ADMIN"]}>
         <Layout header={<AppHeader />} footer={<AppFooter />} style={{ backgroundColor: "#000" }}>
           <View style={{ flex: 1, padding: 16 }}>
             <Text style={{ color: "#fff" }}>Espace introuvable.</Text>
             <TouchableOpacity
-              onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate("SpacesScreen"))}
+              onPress={() =>
+                navigation.canGoBack() ? navigation.goBack() : navigation.navigate("SpacesScreen")
+              }
               style={{ marginTop: 12 }}
             >
               <Text style={{ color: "#A6FF00", fontWeight: "700" }}>Retour</Text>
@@ -179,30 +246,89 @@ export default function SpaceDetailsScreen() {
   }
 
   return (
-    <RoleGuard anyOf={["ROLE_USER","ROLE_ADMIN"]}>
+    <RoleGuard anyOf={["ROLE_USER", "ROLE_ADMIN"]}>
       <Layout header={<AppHeader />} footer={<AppFooter />} style={{ backgroundColor: "#000" }}>
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 24 }}>
+          {space?.permissions && !space.permissions.canManage && (
+            <View
+              style={{
+                backgroundColor: "#151515",
+                borderColor: "#333",
+                borderWidth: 1,
+                padding: 10,
+                borderRadius: 10,
+                marginBottom: 12,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <Ionicons name="lock-closed-outline" size={16} color="#B7FF27" />
+              <Text style={{ color: "#ccc", flex: 1 }}>
+                Accès restreint — vous êtes {space.role === "invited" ? "invité" : "membre"} de cet espace.
+              </Text>
+            </View>
+          )}
+
           {/* Infos espace */}
-          <View style={{ backgroundColor: "#111", borderRadius: 14, padding: 14, borderWidth: 1, borderColor: "#1f1f1f", marginBottom: 12 }}>
+          <View
+            style={{
+              backgroundColor: "#111",
+              borderRadius: 14,
+              padding: 14,
+              borderWidth: 1,
+              borderColor: "#1f1f1f",
+              marginBottom: 12,
+            }}
+          >
             <Text style={{ color: "#9ca3af", marginBottom: 8 }}>Nom</Text>
-            <Text style={{ color: "#fff", marginBottom: 12 }}>{space.name || "—"}</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16, flex: 1 }}>
+                {space.name || "—"}
+              </Text>
+              {/* Rôle visuel juste à côté du nom */}
+              <RoleBadge role={space.role} />
+            </View>
 
             <Text style={{ color: "#9ca3af", marginBottom: 8 }}>Visibilité</Text>
-            <Text style={{ color: "#fff", marginBottom: 12 }}>{space.visibility || "—"}</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <Ionicons
+                name={space.visibility === "public" ? "globe-outline" : "lock-closed-outline"}
+                size={16}
+                color="#B7FF27"
+              />
+              <Text style={{ color: "#fff" }}>{visLabel(space.visibility)}</Text>
+            </View>
 
             <Text style={{ color: "#9ca3af", marginBottom: 8 }}>Description</Text>
             <Text style={{ color: "#fff" }}>{space.description || "—"}</Text>
           </View>
 
           {/* Membres */}
-          <View style={{ backgroundColor: "#0f0f0f", borderRadius: 12, borderWidth: 1, borderColor: "#1f1f1f", padding: 12 }}>
+          <View
+            style={{
+              backgroundColor: "#0f0f0f",
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: "#1f1f1f",
+              padding: 12,
+            }}
+          >
             <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
-              <Text style={{ color: "#B7FF27", fontWeight: "700", flex: 1 }}>Membres ({members.length})</Text>
+              <Text style={{ color: "#B7FF27", fontWeight: "700", flex: 1 }}>
+                Membres ({members.length})
+              </Text>
 
               {canManage && (
                 <TouchableOpacity
                   onPress={() => setShowAdd(true)}
-                  style={{ borderWidth: 1, borderColor: "#A6FF00", borderRadius: 10, paddingVertical: 6, paddingHorizontal: 10 }}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#A6FF00",
+                    borderRadius: 10,
+                    paddingVertical: 6,
+                    paddingHorizontal: 10,
+                  }}
                 >
                   <Text style={{ color: "#A6FF00", fontWeight: "700" }}>Ajouter</Text>
                 </TouchableOpacity>
@@ -215,7 +341,7 @@ export default function SpaceDetailsScreen() {
               members.map((m) => (
                 <View key={m.id} style={{ paddingVertical: 8, borderTopWidth: 1, borderTopColor: "#1f1f1f" }}>
                   <Text style={{ color: "#ede" }}>{m.name || "Membre"}</Text>
-                  <Text style={{ color: "#999", fontSize: 12 }}>{m.relationship || "—"}</Text>
+                  <Text style={{ color: "#999", fontSize: 12 }}>{relLabel(m.relationship) || "—"}</Text>
                 </View>
               ))
             )}
@@ -223,8 +349,19 @@ export default function SpaceDetailsScreen() {
 
           {/* Invitations */}
           {canManage && (
-            <View style={{ backgroundColor: "#0f0f0f", borderRadius: 12, borderWidth: 1, borderColor: "#1f1f1f", padding: 12, marginTop: 12 }}>
-              <Text style={{ color: "#B7FF27", fontWeight: "700", marginBottom: 8 }}>Invitations en attente</Text>
+            <View
+              style={{
+                backgroundColor: "#0f0f0f",
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "#1f1f1f",
+                padding: 12,
+                marginTop: 12,
+              }}
+            >
+              <Text style={{ color: "#B7FF27", fontWeight: "700", marginBottom: 8 }}>
+                Invitations en attente
+              </Text>
 
               {invites.length === 0 ? (
                 <Text style={{ color: "#999" }}>Aucune invitation en attente.</Text>
@@ -232,12 +369,20 @@ export default function SpaceDetailsScreen() {
                 invites.map((inv) => (
                   <View
                     key={inv.id}
-                    style={{ paddingVertical: 8, borderTopWidth: 1, borderTopColor: "#1f1f1f", flexDirection: "row", alignItems: "center", gap: 8 }}
+                    style={{
+                      paddingVertical: 8,
+                      borderTopWidth: 1,
+                      borderTopColor: "#1f1f1f",
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
                   >
                     <View style={{ flex: 1 }}>
                       <Text style={{ color: "#ede" }}>{inv.email}</Text>
                       <Text style={{ color: "#999", fontSize: 12 }}>
-                        {inv.relationship || "—"} {inv.expires_at ? `· expire le ${inv.expires_at}` : ""}
+                        {relLabel(inv.relationship) || "—"}{" "}
+                        {inv.expires_at ? `· expire le ${inv.expires_at}` : ""}
                       </Text>
                     </View>
 
@@ -285,8 +430,18 @@ export default function SpaceDetailsScreen() {
         {/* Modal ajout membre / invitation */}
         <Modal visible={showAdd} transparent animationType="fade" onRequestClose={() => setShowAdd(false)}>
           <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", padding: 16 }}>
-            <View style={{ backgroundColor: "#0f0f0f", borderRadius: 14, padding: 14, borderWidth: 1, borderColor: "#1f1f1f" }}>
-              <Text style={{ color: "#B7FF27", fontWeight: "700", marginBottom: 10 }}>Ajouter un membre</Text>
+            <View
+              style={{
+                backgroundColor: "#0f0f0f",
+                borderRadius: 14,
+                padding: 14,
+                borderWidth: 1,
+                borderColor: "#1f1f1f",
+              }}
+            >
+              <Text style={{ color: "#B7FF27", fontWeight: "700", marginBottom: 10 }}>
+                Ajouter un membre
+              </Text>
 
               <Text style={{ color: "#9ca3af", marginBottom: 6 }}>Email</Text>
               <TextInput
@@ -294,31 +449,78 @@ export default function SpaceDetailsScreen() {
                 placeholderTextColor="#777"
                 autoCapitalize="none"
                 keyboardType="email-address"
-                style={{ color: "#eee", borderWidth: 1, borderColor: "#262626", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, marginBottom: 10 }}
+                style={{
+                  color: "#eee",
+                  borderWidth: 1,
+                  borderColor: "#262626",
+                  borderRadius: 10,
+                  paddingHorizontal: 10,
+                  paddingVertical: 8,
+                  marginBottom: 10,
+                }}
                 value={emailInput}
                 onChangeText={setEmailInput}
               />
 
               <Text style={{ color: "#9ca3af", marginBottom: 6 }}>Lien (relationship)</Text>
-              <TextInput
-                placeholder="ami, famille, collègue…"
-                placeholderTextColor="#777"
-                style={{ color: "#eee", borderWidth: 1, borderColor: "#262626", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, marginBottom: 12 }}
-                value={relInput}
-                onChangeText={setRelInput}
+              <TouchableOpacity
+                onPress={() => setRelModal(true)}
+                style={{
+                  color: "#eee",
+                  borderWidth: 1,
+                  borderColor: "#262626",
+                  borderRadius: 10,
+                  paddingHorizontal: 10,
+                  paddingVertical: 12,
+                  marginBottom: 12,
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <Text style={{ color: "#eee" }}>{relLabel(relKey)}</Text>
+                <Ionicons name="chevron-down" size={16} color="#bbb" />
+              </TouchableOpacity>
+
+              <ModalSelect
+                visible={relModal}
+                title="Relation"
+                options={REL_OPTIONS.map((o) => o.label)}
+                value={relLabel(relKey)}
+                onChange={(label) => {
+                  const k = REL_OPTIONS.find((o) => o.label === label)?.key || "friend";
+                  setRelKey(k);
+                  setRelModal(false);
+                }}
+                onClose={() => setRelModal(false)}
+                compact
+                columns={2}
               />
 
               <View style={{ flexDirection: "row", gap: 8 }}>
                 <TouchableOpacity
                   onPress={() => setShowAdd(false)}
-                  style={{ flex: 1, alignItems: "center", paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: "#444" }}
+                  style={{
+                    flex: 1,
+                    alignItems: "center",
+                    paddingVertical: 12,
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: "#444",
+                  }}
                 >
                   <Text style={{ color: "#bbb" }}>Annuler</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   onPress={onAddMember}
-                  style={{ flex: 1, alignItems: "center", paddingVertical: 12, borderRadius: 10, backgroundColor: "#A6FF00" }}
+                  style={{
+                    flex: 1,
+                    alignItems: "center",
+                    paddingVertical: 12,
+                    borderRadius: 10,
+                    backgroundColor: "#A6FF00",
+                  }}
                 >
                   <Text style={{ color: "#000", fontWeight: "700" }}>Envoyer</Text>
                 </TouchableOpacity>
