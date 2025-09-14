@@ -261,11 +261,11 @@ const validate = () => {
                 >
                   <View style={{ flexDirection:"row", alignItems:"center", gap:10, flex:1 }}>
                     {selectedService?.icon ? (
-                      <img
-                        src={selectedService.icon}
-                        alt=""
-                        style={{ width:20, height:20, borderRadius:4, objectFit:"cover" }}
-                      />
+                        Platform.OS === 'web' ? (
+                          <img src={selectedService.icon} alt="" style={{ width:20, height:20, borderRadius:4, objectFit:"cover" }} />
+                        ) : (
+                          <Image source={{ uri: selectedService.icon }} style={{ width:20, height:20, borderRadius:4 }} />
+                        )
                     ) : (
                       <View style={{ width:20, height:20, borderRadius:4, backgroundColor:"#1f1f1f" }} />
                     )}
