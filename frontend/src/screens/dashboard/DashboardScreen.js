@@ -1,6 +1,7 @@
 // src/screens/dashboard/DashboardScreen.js
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, TouchableOpacity, ScrollView } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, Image } from "react-native";
+import { getServiceIconUrl } from "../../util/serviceIcon";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 
@@ -15,6 +16,14 @@ import styles from "../../styles/DashboardStyles";
 // -------------------- utils --------------------
 const GREEN = "#A6FF00";
 
+  const freqUnitFR = (s) => {
+    const f = (s?.billing_frequency || s?.subscription_type || "").toLowerCase();
+    if (f.includes("year")) return "an";
+    if (f.includes("week")) return "semaine";
+    if (f.includes("day"))  return "jour";
+    return "mois";
+  };
+
 const toFloat = (v) => {
   if (v == null) return 0;
   const f = parseFloat(String(v).replace(",", "."));
@@ -22,10 +31,11 @@ const toFloat = (v) => {
 };
 
 const getInterval = (s) => {
-  const t = (s?.subscription_type || "").toLowerCase();
-  if (t.includes("year")) return "yearly";
-  if (t.includes("week")) return "weekly";
-  if (t.includes("day")) return "daily";
+  // ✅ prefer backend field 'billing_frequency' (monthly|yearly|weekly|daily)
+  const f = (s?.billing_frequency || s?.subscription_type || "").toLowerCase();
+  if (f.includes("year")) return "yearly";
+  if (f.includes("week")) return "weekly";
+  if (f.includes("day"))  return "daily";
   return "monthly";
 };
 
@@ -33,9 +43,9 @@ const getMonthlyAmount = (s) => {
   const amount = toFloat(s?.amount);
   switch (getInterval(s)) {
     case "yearly": return amount / 12;
-    case "weekly": return amount * (52 / 12);
-    case "daily":  return amount * 30;
-    default:       return amount;
+    case "weekly": return (amount * 52) / 12;
+    case "daily":  return amount * (365.25 / 12); // ≈ 30.44 j/mois
+    default:       return amount;                 // monthly
   }
 };
 
@@ -84,6 +94,7 @@ export default function DashboardScreen() {
   const { isLogged, token, user } = useAuth();
 
   const [subs, setSubs] = useState([]);
+  const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
 
@@ -116,6 +127,24 @@ export default function DashboardScreen() {
   }, [isLogged, token]);
 
   useEffect(() => { loadSubs(); }, [loadSubs]);
+
+  // tiny fetch for services (for logos)
+  useEffect(() => {
+    (async () => {
+      if (!token) return;
+      try {
+        const headers = { Authorization: `Bearer ${token}` };
+        const data = await json("/api/service/all", { headers });
+        setServices(Array.isArray(data) ? data : (data?.items ?? []));
+      } catch {}
+    })();
+  }, [token]);
+
+  const serviceMap = useMemo(() => {
+    const m = new Map();
+    services.forEach(s => m.set(String(s.id), s));
+    return m;
+  }, [services]);
 
   // ---- derived ----
   const { activeSubs, totalMonthly, upcomingMap } = useMemo(() => {
@@ -302,29 +331,42 @@ export default function DashboardScreen() {
 
         {/* Liste du jour / semaine */}
         {filteredList.length > 0 ? (
-          filteredList.map((s) => (
-            <View key={s.id} style={[styles.subscriptionCard, { marginTop: 10 }]}>
-              <View style={styles.subscriptionLeft}>
-                <View style={styles.logoBox}>
-                  <Text style={styles.logoText}>{(s.name || "Abo").slice(0, 1)}</Text>
+          filteredList.map((s) => {
+            const svc = serviceMap.get(String(s.service_id));
+            const icon = getServiceIconUrl(svc) || getServiceIconUrl(s?.service);
+            return (
+              <TouchableOpacity
+                key={s.id}
+                style={[styles.subscriptionCard, { marginTop: 10 }]}
+                onPress={() => nav.navigate("SubscriptionDetails", { id: s.id, subscription: s })}
+                activeOpacity={0.75}
+              >
+                <View style={styles.subscriptionLeft}>
+                  {icon ? (
+                    <Image source={{ uri: icon }} style={{ width: 28, height: 28, borderRadius: 6, marginRight: 8 }} />
+                  ) : (
+                    <View style={styles.logoBox}>
+                      <Text style={styles.logoText}>{(s.name || "Abo").slice(0, 1)}</Text>
+                    </View>
+                  )}
+                  <View>
+                    <Text style={styles.subscriptionTitle}>{s.name || svc?.name || "—"}</Text>
+                    <Text style={styles.subscriptionDesc}>
+                      Échéance le {s._nextDue ? s._nextDue.toLocaleDateString("fr-FR") : "—"}
+                    </Text>
+                  </View>
                 </View>
-                <View>
-                  <Text style={styles.subscriptionTitle}>{s.name || "—"}</Text>
-                  <Text style={styles.subscriptionDesc}>
-                    Échéance le {s._nextDue ? s._nextDue.toLocaleDateString("fr-FR") : "—"}
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.subscriptionPrice}>
-                {formatEUR(getMonthlyAmount(s))} <Text style={styles.perMonth}>/mois</Text>
-              </Text>
-            </View>
-          ))
-        ) : (
-          <View style={styles.emptyState}>
-            <Ionicons name="card-outline" size={22} color="#666" />
-            <Text style={styles.emptyText}>Aucun abonnement pour le moment.</Text>
-            <TouchableOpacity style={styles.primaryBtn} onPress={goAdd}>
+                <Text style={styles.subscriptionPrice}>
+                  {formatEUR(toFloat(s.amount))} <Text style={styles.perMonth}>/{freqUnitFR(s)}</Text>
+                </Text>
+              </TouchableOpacity>
+            );
+            })
+          ) : (
+        <View style={styles.emptyState}>
+          <Ionicons name="card-outline" size={22} color="#666" />
+          <Text style={styles.emptyText}>Aucun abonnement pour le moment.</Text>
+          <TouchableOpacity style={styles.primaryBtn} onPress={goAdd}>
               <Text style={styles.primaryBtnText}>AJOUTER</Text>
             </TouchableOpacity>
           </View>

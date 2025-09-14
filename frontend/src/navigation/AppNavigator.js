@@ -82,7 +82,7 @@ export default function AppNavigator() {
           <Stack.Screen name="Home" component={HomeScreen} />
           <Stack.Screen name="Dashboard" component={DashboardScreen} />
           <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: "Mon Profil" }} />
-          <Stack.Screen name="ActiveSubscription" component={ActiveSubscriptionScreen} options={{ title: "Mon Abonnement Actif" }} />
+          <Stack.Screen name="ActiveSubscription" component={ActiveSubscriptionScreen} options={{ title: "Mes Abonnements Actifs" }} />
           <Stack.Screen name="SubscriptionList" component={SubscriptionListScreen} options={{ title: "Mes Abonnements" }} />
           <Stack.Screen name="SubscriptionDetails" component={SubscriptionDetailsScreen} options={{ title: "Détails de l'Abonnement" }} />
           <Stack.Screen name="SubscriptionItem" component={SubscriptionItem} />
