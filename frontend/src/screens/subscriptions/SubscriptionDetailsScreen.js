@@ -1,8 +1,7 @@
 // src/screens/subscriptions/SubscriptionDetailsScreen.js
 import React, { useState, useCallback, useMemo } from "react";
-import {
-  View, Text, TouchableOpacity, Alert, Platform, ScrollView, ActivityIndicator,
-} from "react-native";
+import { View, Text, TouchableOpacity, Alert, Platform, ScrollView, ActivityIndicator, Image } from "react-native";
+import { getServiceIconUrl } from "../../util/serviceIcon";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRoute, useNavigation } from "@react-navigation/native";
 
@@ -210,12 +209,27 @@ export default function SubscriptionDetailsScreen() {
               <Ionicons name="arrow-back" size={20} color="#000" />
             </TouchableOpacity>
             <Text style={styles.title} numberOfLines={1}>{sub.name || "Abonnement"}</Text>
-            <View style={{ width: 36 }} />
           </View>
 
           {/* Badge statut */}
           <View style={[styles.badge, { backgroundColor: bs.bg }]}>
             <Text style={[styles.badgeText, { color: bs.fg }]}>{bs.label}</Text>
+          </View>
+
+          <View style={styles.serviceRow}>
+            {(() => {
+              const icon = getServiceIconUrl(sub.service);
+              if (icon) {
+                return <Image source={{ uri: icon }} style={styles.serviceIcon} />;
+              }
+              const letter = (sub.service?.name || sub.service_name || "?").slice(0,1).toUpperCase();
+              return (
+                <View style={styles.serviceFallback}>
+                  <Text style={styles.serviceFallbackText}>{letter}</Text>
+                </View>
+              );
+            })()}
+            <Text style={styles.serviceName}>{sub.service?.name || sub.service_name || "Service"}</Text>
           </View>
 
           {/* Carte montant / dates / renouvellement */}
@@ -329,7 +343,7 @@ export default function SubscriptionDetailsScreen() {
             <TouchableOpacity
               style={styles.secondaryBtn}
               onPress={() => {
-                navigation.navigate("CustomSubscription", {
+                navigation.navigate("AddSubscription", {
                   mode: "edit",
                   id,            // id source de vérité
                   snapshot: sub, // pour pré-remplir instantanément

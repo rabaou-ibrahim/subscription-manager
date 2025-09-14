@@ -1,31 +1,47 @@
 import { StyleSheet } from "react-native";
 
 export default StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: "#0E0E0E",
-        padding: 16,
-    },
     headerRow: {
-        flexDirection: "row",
-        alignItems: "center",
+        position: "relative",
+        minHeight: 36,
+        justifyContent: "center",
         marginBottom: 8,
     },
     iconBtn: {
+        position: "absolute",
+        left: 0,
         width: 36,
         height: 36,
         borderRadius: 10,
         backgroundColor: "#72CE1D",
         alignItems: "center",
         justifyContent: "center",
+        zIndex: 2,
     },
     title: {
-        flex: 1,
+        position: "absolute",
+        left: 0,
+        right: 0,
         color: "#fff",
         fontSize: 20,
         fontWeight: "800",
         textAlign: "center",
+        paddingHorizontal: 48,
+        pointerEvents: "none",
     },
+   serviceRow: {
+     flexDirection: "row",
+     alignItems: "center",
+     marginBottom: 8,
+     gap: 10,
+   },
+   serviceIcon: { width: 22, height: 22, borderRadius: 6 },
+   serviceFallback: {
+     width: 22, height: 22, borderRadius: 6, backgroundColor: "#222",
+     alignItems: "center", justifyContent: "center",
+   },
+   serviceFallbackText: { color: "#B7FF27", fontWeight: "800", fontSize: 12 },
+   serviceName: { color: "#fff", fontWeight: "700" },
     badge: {
         alignSelf: "flex-start",
         paddingHorizontal: 10,
