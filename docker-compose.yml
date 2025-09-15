@@ -1,0 +1,57 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-mini_P}
+      POSTGRES_USER: ${POSTGRES_USER:-symfony}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"       # dev only; en prod enlève ceci
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-symfony} -d ${POSTGRES_DB:-mini_P}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  php:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      APP_ENV: dev
+      POSTGRES_DB: ${POSTGRES_DB:-mini_P}
+      POSTGRES_USER: ${POSTGRES_USER:-symfony}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      DATABASE_URL: "pgsql://${POSTGRES_USER:-symfony}:${POSTGRES_PASSWORD:-change-me}@db:5432/${POSTGRES_DB:-mini_P}?serverVersion=17&charset=utf8"
+      COMPOSER_ALLOW_SUPERUSER: "1"
+    ports:
+      - "8080:80"
+    volumes:
+      - ./backend:/var/www/html
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      bash -lc "
+        composer install --no-interaction --prefer-dist --no-progress &&
+        php bin/console doctrine:database:create --if-not-exists || true &&
+        php bin/console doctrine:migrations:migrate -n || true &&
+        apache2-foreground
+      "
+
+  pgadmin:
+    image: dpage/pgadmin4:7
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@local.test
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - db
+
+volumes:
+  pg_data:

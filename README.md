@@ -1,1 +1,1 @@
-# Mini-Plan
+# Subscription Manager

@@ -76,7 +76,6 @@ export default function AddSubscriptionScreen() {
   const [spaceId,  setSpaceId]  = useState(initialSpaceId);
   const [resolving, setResolving] = useState(false);
 
-  // services
   const [services, setServices] = useState([]);
   useEffect(() => {
     (async () => {
@@ -89,7 +88,6 @@ export default function AddSubscriptionScreen() {
     })();
   }, [token]);
 
-  // formulaire
   const [serviceId, setServiceId] = useState(null);
   const [showService, setShowService] = useState(false);
 
@@ -185,7 +183,6 @@ export default function AddSubscriptionScreen() {
   };
 
   const handleCreate = async () => {
-    console.log("[AddSub] click", { resolving, memberId, serviceId, name, startISO, endISO });
     if (resolving) {
       Alert.alert("Encore 1 seconde", "On prépare ton espace…");
       return;
@@ -226,13 +223,6 @@ export default function AddSubscriptionScreen() {
     } catch (e) {
       Alert.alert("Erreur", e?.message || "Création impossible");
     }
-  };
-
-  const onCreate = (e) => {
-    if (e?.preventDefault) e.preventDefault();
-    if (e?.stopPropagation) e.stopPropagation();
-    if (resolving) return;
-    handleCreate();
   };
 
   const textWhite = { color: "#fff" };
@@ -394,24 +384,15 @@ export default function AddSubscriptionScreen() {
               </View>
             </ScrollView>
 
-            {Platform.OS === "web" ? (
-              <Pressable
-                onClick={onCreate}
-                role="button"
-                aria-label="Créer l’abonnement"
-                style={[styles.button, resolving && { opacity: .6, pointerEvents: "none" }]}
-              >
-                <Text style={styles.buttonText}>{resolving ? "Préparation…" : "Créer"}</Text>
-              </Pressable>
-            ) : (
-              <TouchableOpacity
-                style={[styles.button, resolving && { opacity: .6 }]}
-                disabled={resolving}
-                onPress={onCreate}
-              >
-                <Text style={styles.buttonText}>{resolving ? "Préparation…" : "Créer"}</Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              style={[styles.button, resolving && { opacity: .6, pointerEvents: "none" }]}
+              disabled={resolving}
+              onPress={handleCreate}
+              accessibilityRole="button"
+              accessibilityLabel="Créer l’abonnement"
+            >
+              <Text style={styles.buttonText}>{resolving ? "Préparation…" : "Créer"}</Text>
+            </TouchableOpacity>
           </KeyboardAvoidingView>
 
           {/* === Modals === */}
