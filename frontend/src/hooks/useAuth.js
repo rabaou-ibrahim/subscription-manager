@@ -14,7 +14,6 @@ export function AuthProvider({ children }) {
 
   const isLogged = !!token;
 
-  // roles peut être un array (recommandé) ou une string côté backend
   const rawRoles = user?.roles ?? user?.role ?? [];
   const rolesArr = Array.isArray(rawRoles) ? rawRoles : [rawRoles].filter(Boolean);
 
@@ -79,7 +78,6 @@ export function AuthProvider({ children }) {
       phone_number: payload.phone_number ?? null,
       age: (payload.age ?? "") === "" ? null : Number(payload.age),
       avatar: payload.avatar ?? null,
-      // ces champs peuvent être ignorés par le backend si non autorisés
       roles: ["ROLE_USER"],
       is_active: true,
     };

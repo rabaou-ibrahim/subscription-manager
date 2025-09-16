@@ -24,19 +24,16 @@ function extractMessage(status, data) {
 export async function json(path, opts = {}) {
   const url = path.startsWith("http") ? path : `${BASE}${path}`;
 
-  // ✅ on empêche opts.headers d’écraser nos headers par défaut
   const { headers: extraHeaders = {}, body, ...rest } = opts;
   const method = (rest.method || "GET").toUpperCase();
 
   const init = {
     method,
-    // Ajoute Content-Type seulement quand pertinent
     headers: {
       Accept: "application/json",
       ...((method !== "GET" && method !== "HEAD") ? { "Content-Type": "application/json" } : {}),
       ...extraHeaders,
     },
-    // N’envoie pas de body sur GET/HEAD
     ...((method !== "GET" && method !== "HEAD" && body != null)
       ? { body: typeof body === "string" ? body : JSON.stringify(body) }
       : {}),
@@ -44,13 +41,13 @@ export async function json(path, opts = {}) {
   };
 
   const res = await fetch(url, init);
-  const ct = res.headers.get("content-type") || "";
-  const isJson = ct.includes("application/json");
+  const content = res.headers.get("content-type") || "";
+  const isJson = content.includes("application/json");
   let data = null;
   try { data = isJson ? await res.json() : await res.text(); } catch {}
 
   if (!res.ok) {
-    const msg = extractMessage(res.status, data) || `${method} ${url} → ${res.status}`;
+    const msg = extractMessage(res.status, data) || `${method} ${url} - ${res.status}`;
     const err = new Error(msg);
     err.status = res.status;
     err.data = data;
