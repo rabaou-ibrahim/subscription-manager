@@ -43,7 +43,6 @@ function ServicesAdminInner() {
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState(null);
 
-  // modal / form
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
 
@@ -178,7 +177,7 @@ function ServicesAdminInner() {
     try {
       await json(`/api/service/delete/${svc.id}`, { method: "DELETE", headers: { ...authHeaders } });
     } catch (e) {
-      setServices(prev); // rollback
+      setServices(prev);
       Alert.alert("Erreur", e?.message || "Suppression impossible");
     }
   };
@@ -190,8 +189,6 @@ function ServicesAdminInner() {
         <View style={styles.leftIcon}>
           {iconUrl ? (
             <View style={{ width: 24, height: 24, borderRadius: 4, overflow: "hidden" }}>
-              {/* petite image via <img> web ou Image RN selon ton setup; Text fallback */}
-              {/* Sur RN web, on peut laisser un carré vide si tu n'as pas d'Image ici */}
             </View>
           ) : (
             <Text style={{ color:"#72CE1D", fontWeight:"800" }}>

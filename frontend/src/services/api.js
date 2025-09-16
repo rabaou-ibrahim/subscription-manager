@@ -1,9 +1,6 @@
-// frontend/src/services/api.js
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 
-// ⚙️ Base API (dev local: Android emulator = 10.0.2.2, iOS sim = 127.0.0.1)
-// Tu peux aussi surcharger via EXPO_PUBLIC_API_URL / VITE_API_URL
 const DEFAULT_HOST = Platform.OS === "android" ? "10.0.2.2" : "127.0.0.1";
 const API_URL =
   process.env.EXPO_PUBLIC_API_URL ||
@@ -13,7 +10,7 @@ const API_URL =
 const isAbsolute = (u) => /^https?:\/\//i.test(u);
 const joinUrl = (base, path) => {
   if (!path) return base;
-  if (isAbsolute(path)) return path; // déjà absolue -> on ne préfixe pas
+  if (isAbsolute(path)) return path;
   return `${base.replace(/\/+$/, "")}/${String(path).replace(/^\/+/, "")}`;
 };
 

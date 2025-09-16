@@ -2,14 +2,13 @@
 const BASE = (process.env.EXPO_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
 
 function extractMessage(status, data) {
-  // 1) Réponses Validator: { violations: [{propertyPath, message}, ...] }
   if (data && Array.isArray(data.violations) && data.violations.length) {
     return data.violations
       .map(v => v.message || (v.propertyPath ? `${v.propertyPath}: ${v.message}` : ""))
       .filter(Boolean)
       .join("\n");
   }
-  // 2) Champs courants
+  
   if (data && typeof data === "object") {
     if (data.message) return data.message;
     if (data.error)   return data.error;

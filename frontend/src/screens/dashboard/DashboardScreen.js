@@ -1,4 +1,3 @@
-// src/screens/dashboard/DashboardScreen.js
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, TouchableOpacity, ScrollView, Image } from "react-native";
 import { getServiceIconUrl } from "../../util/serviceIcon";
@@ -13,7 +12,6 @@ import RoleGuard from "../../guards/RoleGuard";
 import { json } from "../../services/http";
 import styles from "../../styles/DashboardStyles";
 
-// -------------------- utils --------------------
 const GREEN = "#A6FF00";
 
   const freqUnitFR = (s) => {
@@ -31,7 +29,6 @@ const toFloat = (v) => {
 };
 
 const getInterval = (s) => {
-  // ✅ prefer backend field 'billing_frequency' (monthly|yearly|weekly|daily)
   const f = (s?.billing_frequency || s?.subscription_type || "").toLowerCase();
   if (f.includes("year")) return "yearly";
   if (f.includes("week")) return "weekly";
@@ -44,8 +41,8 @@ const getMonthlyAmount = (s) => {
   switch (getInterval(s)) {
     case "yearly": return amount / 12;
     case "weekly": return (amount * 52) / 12;
-    case "daily":  return amount * (365.25 / 12); // ≈ 30.44 j/mois
-    default:       return amount;                 // monthly
+    case "daily":  return amount * (365.25 / 12); 
+    default:       return amount;          
   }
 };
 
@@ -54,8 +51,8 @@ const addMonthsSafe = (d, m) => { const x = new Date(d); x.setMonth(x.getMonth()
 
 const startOfISOWeek = (d) => {
   const x = new Date(d);
-  const wd = x.getDay(); // 0=Dim..6=Sam
-  const diff = (wd === 0 ? -6 : 1) - wd; // aller au lundi
+  const wd = x.getDay(); 
+  const diff = (wd === 0 ? -6 : 1) - wd;
   x.setDate(x.getDate() + diff);
   x.setHours(0, 0, 0, 0);
   return x;
@@ -88,7 +85,6 @@ const formatWeekRangeFR = (weekStart) => {
   return `${left}–${right}`;
 };
 
-// -------------------- screen --------------------
 export default function DashboardScreen() {
   const nav = useNavigation();
   const { isLogged, token, user } = useAuth();
@@ -98,23 +94,20 @@ export default function DashboardScreen() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
 
-  // calendrier
   const [mode, setMode] = useState("week"); // 'week' | 'month'
   const [weekStart, setWeekStart] = useState(startOfISOWeek(new Date()));
-  const [cursor, setCursor] = useState(new Date()); // mois courant
+  const [cursor, setCursor] = useState(new Date());
   const [selectedYMD, setSelectedYMD] = useState(null);
 
   const displayName = user?.firstname || user?.email || "Utilisateur";
   const now = new Date();
 
-  // ---- data load ----
   const loadSubs = useCallback(async () => {
     if (!isLogged || !token) return;
     setLoading(true);
     setErr(null);
     try {
       const headers = { Authorization: `Bearer ${token}` };
-      // On tente "mine" puis fallback "all"
       const data = await json("/api/subscription/mine", { headers }).catch(() =>
         json("/api/subscription/all", { headers })
       );
@@ -128,7 +121,6 @@ export default function DashboardScreen() {
 
   useEffect(() => { loadSubs(); }, [loadSubs]);
 
-  // tiny fetch for services (for logos)
   useEffect(() => {
     (async () => {
       if (!token) return;
@@ -146,7 +138,6 @@ export default function DashboardScreen() {
     return m;
   }, [services]);
 
-  // ---- derived ----
   const { activeSubs, totalMonthly, upcomingMap } = useMemo(() => {
     const active = (subs || [])
       .filter((s) => (s?.status || "active") === "active")
@@ -193,7 +184,6 @@ export default function DashboardScreen() {
     return [];
   }, [upcomingMap, selectedYMD, mode, weekStart]);
 
-  // ---- actions ----
   const goAdd = () => nav.navigate("AddSubscription");
   const goVoirPlusDepenses = () => nav.navigate("ActiveSubscription");
   const goVoirPlusCalendar = () => {
@@ -201,7 +191,6 @@ export default function DashboardScreen() {
     else nav.navigate("ActiveSubscription", { weekStart: toYMD(weekStart) });
   };
 
-  // -------------------- UI --------------------
   return (
     <RoleGuard anyOf={["ROLE_USER","ROLE_ADMIN"]}>
     <Layout scroll={false} header={<AppHeader />} footer={<AppFooter />}>
@@ -216,7 +205,6 @@ export default function DashboardScreen() {
 
         <Text style={styles.greeting}>Bonjour {displayName}</Text>
 
-        {/* CTA Ajouter */}
         <View style={styles.topActions}>
           <TouchableOpacity style={styles.primaryBtnLg} onPress={goAdd}>
             <Ionicons name="add" size={18} color="#000" />

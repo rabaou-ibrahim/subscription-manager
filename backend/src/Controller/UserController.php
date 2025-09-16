@@ -87,12 +87,10 @@ class UserController extends AbstractController
             return $this->json(['errors' => $errs], 422);
         }
 
-        // 6) Persist + gestion des doublons propres
         try {
             $em->persist($user);
             $em->flush();
         } catch (UniqueConstraintViolationException $e) {
-            // On devine le champ selon le message/contrainte — sinon message générique.
             $msg = 'Email ou pseudo déjà utilisé.';
             $txt = strtolower($e->getMessage());
             if (str_contains($txt, 'email')) {
@@ -102,11 +100,9 @@ class UserController extends AbstractController
             }
             return $this->json(['error' => $msg], 409);
         } catch (\Throwable $e) {
-            // Loggue en prod; ici on reste concis côté client
             return $this->json(['error' => 'Erreur serveur'], 500);
         }
 
-        // 7) Réponse 201 (sans password)
         return $this->json([
             'id'          => $user->getId(),
             'firstname'   => $user->getFirstname(),

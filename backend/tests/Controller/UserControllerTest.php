@@ -28,7 +28,6 @@ class UserControllerTest extends WebTestCase
             json_encode($payload, JSON_THROW_ON_ERROR)
         );
 
-        // Si ça pète encore, loggue la réponse brute pour debug rapide
         if ($client->getResponse()->getStatusCode() >= 500) {
             fwrite(STDERR, "\nRESPONSE BODY:\n".$client->getResponse()->getContent(false)."\n");
         }

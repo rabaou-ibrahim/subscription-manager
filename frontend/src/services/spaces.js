@@ -1,4 +1,3 @@
-// src/services/spaces.js
 import { json } from "./http";
 
 const BASE = "/api/space";

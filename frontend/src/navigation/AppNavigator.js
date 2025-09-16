@@ -1,4 +1,3 @@
-// src/navigation/AppNavigator.js
 import React, { useState, useEffect} from "react";
 import { View, Text, ActivityIndicator } from "react-native";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";

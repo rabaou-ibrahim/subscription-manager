@@ -2,7 +2,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, useWindowDimensions, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native"; // 👈
+import { useNavigation } from "@react-navigation/native";
 import useAuth from "../hooks/useAuth";
 import RoleBadge from "./RoleBadge";
 
@@ -11,7 +11,7 @@ const BORDER = "#242424";
 
 export default function AppHeader() {
   const { isLogged, logout } = useAuth();
-  const navigation = useNavigation();               // 👈 on récupère la nav ici
+  const navigation = useNavigation();
   const { width } = useWindowDimensions();
   const isSmall = width < 480;
 
@@ -29,7 +29,6 @@ export default function AppHeader() {
           justifyContent: "space-between",
         }}
       >
-        {/* Brand */}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <View
             style={{
@@ -46,7 +45,6 @@ export default function AppHeader() {
           <Text style={{ color: "#fff", fontWeight: "800" }}>Subscription Manager</Text>
         </View>
 
-        {/* Nav */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
           <HeaderBtn label="Accueil" icon="home-outline" onPress={() => navigation.navigate("Home")} compact={isSmall} />
           {!isLogged ? (
@@ -63,7 +61,8 @@ export default function AppHeader() {
               <HeaderBtn label="Dashboard" icon="speedometer-outline" onPress={() => navigation.navigate("Dashboard")} compact={isSmall} />
               <HeaderBtn label="Abonnements" icon="albums-outline" onPress={() => navigation.navigate("SubscriptionList")} compact={isSmall} />
               <HeaderBtn label="Profil" icon="person-outline" onPress={() => navigation.navigate("Profile")} compact={isSmall} />
-              <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 16, borderWidth: 1, borderColor: BORDER, minWidth: 160, justifyContent: "center", backgroundColor: GREEN }} onPress={logout}>
+              <TouchableOpacity style={{ 
+                flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 16, borderWidth: 1, borderColor: BORDER, minWidth: 160, justifyContent: "center", backgroundColor: GREEN }} onPress={logout}>
                 <Ionicons name="log-out-outline" size={18} color="#000" />
                 <Text style={{ color: "#000", fontWeight: "800" }}>Se déconnecter</Text>
               </TouchableOpacity>

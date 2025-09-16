@@ -22,12 +22,12 @@ use Doctrine\DBAL\Types\Types;
     message: "L'email et le pseudo doivent être différents."
 )]
 #[ORM\Entity(repositoryClass: UserRepository::class)]
-#[ORM\Table(name: "`users`")] // Éviter les conflits avec le mot réservé "user"
+#[ORM\Table(name: "`users`")] 
 #[ORM\HasLifecycleCallbacks]
 class User implements UserInterface, PasswordAuthenticatedUserInterface
 {
     #[ORM\Id]
-    #[ORM\Column(type: "guid", unique: true)] // Utilisation de "guid" pour compatibilité avec Doctrine
+    #[ORM\Column(type: "guid", unique: true)]
     #[ORM\GeneratedValue(strategy: "CUSTOM")]
     #[ORM\CustomIdGenerator(class: UuidGenerator::class)]
     private ?string $id = null;

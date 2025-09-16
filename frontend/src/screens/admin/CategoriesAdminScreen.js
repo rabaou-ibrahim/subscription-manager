@@ -1,4 +1,3 @@
-// src/screens/admin/CategoriesAdminScreen.js
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View, Text, TextInput, TouchableOpacity, FlatList, SafeAreaView,
@@ -14,7 +13,7 @@ import { json } from "../../services/http";
 import useAuth from "../../hooks/useAuth";
 import styles from "../../styles/CategoriesAdminStyles";
 
-const TYPE_OPTIONS = ["expense", "income", "savings"]; // conforme à ton Entity
+const TYPE_OPTIONS = ["expense", "income", "savings"];
 
 export default function CategoriesAdminScreen() {
   return (
@@ -34,7 +33,6 @@ function CategoriesAdminInner() {
 
   const [search, setSearch] = useState("");
 
-  // modal / form
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
 

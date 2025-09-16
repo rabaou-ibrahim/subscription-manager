@@ -5,18 +5,16 @@ import { useNavigation } from "@react-navigation/native";
 import useAuth from "../hooks/useAuth";
 
 export default function RoleGuard({
-  anyOf = [],     // au moins un de ces rôles
-  allOf = [],     // et (optionnel) tous ces rôles
+  anyOf = [],
+  allOf = [],
   fallback = null,
   children,
 }) {
   const nav = useNavigation();
   const { ready, isLogged, roles } = useAuth();
 
-  // attente de l’hydratation du contexte auth
   if (!ready) return null;
 
-  // non connecté → invite à se connecter
   if (!isLogged) {
     return (
       fallback ?? (

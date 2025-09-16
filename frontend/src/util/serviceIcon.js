@@ -1,6 +1,3 @@
-// src/utils/serviceIcon.js
-
-// Map nom → domaine (ajoute/édite au besoin)
 const SERVICE_DOMAINS = {
   'Netflix': 'netflix.com',
   'Amazon Prime Video': 'primevideo.com',
@@ -21,17 +18,13 @@ const SERVICE_DOMAINS = {
   'Free': 'free.fr',
 };
 
-// Génère une URL PNG depuis un domaine (Google S2 favicons, fiable et léger)
 const favicon = (domain) =>
   `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`;
 
-// Retourne une URL d'icône OU null si rien trouvé
 export function getServiceIconUrl(serviceOrName) {
   const s = serviceOrName || {};
   const name = (s.name || s.title || s).trim?.() || '';
 
-  // 1) l’API fournit déjà quelque chose ?
-  // (ton backend a un champ "logo", mais on couvre aussi d’autres noms possibles)
   if (s.logo) return s.logo;
   if (s.logo_url) return s.logo_url;
   if (s.icon) return s.icon;

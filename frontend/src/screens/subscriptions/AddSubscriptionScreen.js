@@ -203,7 +203,7 @@ export default function AddSubscriptionScreen() {
       notes: notes?.trim() || null,
       amount: twoDecimals(amount),
       currency,
-      ...(memberId ? { member_id: memberId } : {}), // ← perso si absent
+      ...(memberId ? { member_id: memberId } : {}),
     };
 
     try {
@@ -389,7 +389,7 @@ export default function AddSubscriptionScreen() {
               disabled={resolving}
               onPress={handleCreate}
               accessibilityRole="button"
-              accessibilityLabel="Créer l’abonnement"
+              accessibilityLabel="Créer l'abonnement"
             >
               <Text style={styles.buttonText}>{resolving ? "Préparation…" : "Créer"}</Text>
             </TouchableOpacity>

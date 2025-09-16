@@ -52,7 +52,6 @@ final class AuthAndCategoryTest extends WebTestCase
     {
         $client = static::createClient();
 
-        // 1) create user (public)
         $this->json($client, 'POST', '/api/user/create', [
             'firstname' => 'Test',
             'lastname'  => 'User',
@@ -61,7 +60,6 @@ final class AuthAndCategoryTest extends WebTestCase
         ]);
         self::assertResponseStatusCodeSame(201);
 
-        // 2) route protégée sans token -> 401/403 attendu
         $client->request('GET', '/api/member/all');
         self::assertTrue(in_array($client->getResponse()->getStatusCode(), [401, 403], true));
     }
@@ -71,18 +69,16 @@ final class AuthAndCategoryTest extends WebTestCase
         $client = static::createClient();
 
         $email = 'test+'.uniqid().'@example.com';
-        $password = 'testpass123';
+        $password = 'testpwd123';
 
-        // créer user
         $this->json($client, 'POST', '/api/user/create', [
-            'firstname' => 'Cat',
-            'lastname'  => 'Owner',
+            'firstname' => 'Test',
+            'lastname'  => 'TEST',
             'email'     => $email,
             'password'  => $password,
         ]);
         self::assertResponseStatusCodeSame(201);
 
-        // login -> récup JWT
         $this->json($client, 'POST', '/api/auth/login', [
             'email'    => $email,
             'password' => $password,
@@ -92,11 +88,10 @@ final class AuthAndCategoryTest extends WebTestCase
         $token = $data['token'] ?? $data['id_token'] ?? $data['jwt'] ?? null;
         self::assertNotEmpty($token, 'JWT token manquant dans la réponse de login');
 
-        // créer category
         $this->json($client, 'POST', '/api/category/create', [
             'name'  => 'Streaming',
             'color' => '#FF8800',
-            'type'  => 'expense', // minuscules pour matcher la validation côté API
+            'type'  => 'expense',
         ], $this->bearer($token));
 
         $status = $client->getResponse()->getStatusCode();
