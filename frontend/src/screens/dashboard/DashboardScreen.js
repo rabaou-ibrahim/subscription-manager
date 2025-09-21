@@ -176,7 +176,9 @@ export default function DashboardScreen() {
   }, [mode, weekStart, cursor]);
 
   const filteredList = useMemo(() => {
-    if (selectedYMD) return (upcomingMap.get(selectedYMD) || []).slice().sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    if (selectedYMD) { 
+      return (upcomingMap.get(selectedYMD) || []).slice().sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    }
     if (mode === "week") {
       const keys = Array.from({ length: 7 }, (_, i) => toYMD(addDays(weekStart, i)));
       return keys.flatMap((k) => upcomingMap.get(k) || []);
@@ -185,10 +187,14 @@ export default function DashboardScreen() {
   }, [upcomingMap, selectedYMD, mode, weekStart]);
 
   const goAdd = () => nav.navigate("AddSubscription");
-  const goVoirPlusDepenses = () => nav.navigate("ActiveSubscription");
-  const goVoirPlusCalendar = () => {
-    if (selectedYMD) nav.navigate("ActiveSubscription", { day: selectedYMD });
-    else nav.navigate("ActiveSubscription", { weekStart: toYMD(weekStart) });
+  const goSeeMoreExpenses = () => nav.navigate("ActiveSubscription");
+  const goSeeMoreCalendar = () => {
+    if (selectedYMD) { 
+      nav.navigate("ActiveSubscription", { day: selectedYMD });
+    }
+    else {
+      nav.navigate("ActiveSubscription", { weekStart: toYMD(weekStart) });
+    }
   };
 
   return (
@@ -216,7 +222,7 @@ export default function DashboardScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Dépenses</Text>
-            <TouchableOpacity onPress={goVoirPlusDepenses}><Text style={styles.seeMore}>Voir plus</Text></TouchableOpacity>
+            <TouchableOpacity onPress={goSeeMoreExpenses}><Text style={styles.seeMore}>Voir plus</Text></TouchableOpacity>
           </View>
 
           <View style={styles.card}>
@@ -224,7 +230,7 @@ export default function DashboardScreen() {
               <Ionicons name="calendar" size={16} /> {monthLabelFR(now)}
             </Text>
             <Text style={styles.cardText}>
-              <Ionicons name="layers" size={16} /> {activeSubs.length} abonnements
+              <Ionicons name="pizza" size={16} /> {activeSubs.length} abonnements
             </Text>
             {loading
               ? <Text style={styles.cardText}>Calcul…</Text>
@@ -237,7 +243,7 @@ export default function DashboardScreen() {
         {/* Calendrier */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Calendrier</Text>
-          <TouchableOpacity onPress={goVoirPlusCalendar}><Text style={styles.seeMore}>Voir plus</Text></TouchableOpacity>
+          <TouchableOpacity onPress={goSeeMoreCalendar}><Text style={styles.seeMore}>Voir plus</Text></TouchableOpacity>
         </View>
 
         {/* Filtres semaine/mois */}
