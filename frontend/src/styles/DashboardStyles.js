@@ -8,25 +8,25 @@ const DashboardStyles = StyleSheet.create({
     },
 
     tabsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 20,
     },
 
     activeTab: {
-    backgroundColor: '#fff',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    marginHorizontal: 8,    // <—
+        backgroundColor: '#fff',
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        borderRadius: 20,
+        marginHorizontal: 8,
     },
     inactiveTab: {
-    backgroundColor: '#333',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    marginHorizontal: 8,    // <—
+        backgroundColor: '#333',
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        borderRadius: 20,
+        marginHorizontal: 8,
     },
 
     activeTabText: { 
